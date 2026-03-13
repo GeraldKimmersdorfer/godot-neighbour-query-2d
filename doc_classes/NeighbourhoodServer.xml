@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NeighbourhoodServer" inherits="Object" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Singleton server for spatial neighbourhood queries on [Node2D] objects.
+	</brief_description>
+	<description>
+		NeighbourhoodServer is an autoloaded singleton that allows [Node2D] objects to subscribe with associated data. It provides efficient spatial queries to retrieve the nearest neighbour or all neighbours within a given distance.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_all">
+			<return type="Neighbour[]" />
+			<param index="0" name="position" type="Vector2" />
+			<param index="1" name="max_distance" type="float" default="0.0" />
+			<description>
+				Returns all subscribed neighbours near [param position]. If [param max_distance] is greater than [code]0.0[/code], only neighbours within that distance are included.
+			</description>
+		</method>
+		<method name="get_next">
+			<return type="Neighbour" />
+			<param index="0" name="position" type="Vector2" />
+			<param index="1" name="max_distance" type="float" default="0.0" />
+			<description>
+				Returns the nearest subscribed neighbour to [param position]. If [param max_distance] is greater than [code]0.0[/code], only considers neighbours within that distance. Returns [code]null[/code] if none are found.
+			</description>
+		</method>
+		<method name="subscribe">
+			<return type="void" />
+			<param index="0" name="node" type="Node2D" />
+			<param index="1" name="data" type="Variant" />
+			<description>
+				Subscribes [param node] to the NeighbourhoodServer with the given [param data]. The node can then be found by spatial queries.
+			</description>
+		</method>
+		<method name="unsubscribe">
+			<return type="void" />
+			<param index="0" name="node" type="Node2D" />
+			<description>
+				Removes [param node] from the NeighbourhoodServer so it is no longer returned by spatial queries.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="grid_size" type="int" setter="set_grid_size" getter="get_grid_size" default="128">
+			The size of each grid cell used for spatial partitioning.
+		</member>
+		<member name="refresh_intervall" type="float" setter="set_refresh_intervall" getter="get_refresh_intervall" default="0.1">
+			The time interval (in seconds) between grid refreshes.
+		</member>
+	</members>
+</class>
