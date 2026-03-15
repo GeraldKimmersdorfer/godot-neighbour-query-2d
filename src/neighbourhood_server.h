@@ -6,6 +6,8 @@
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/vector2.hpp>
 
+#include <atomic>
+#include <thread>
 #include <unordered_map>
 
 using namespace godot;
@@ -23,13 +25,23 @@ class NeighbourhoodServer : public Object {
 	float refresh_intervall = 0.1f;
 
 	std::unordered_map<Node2D *, Subscriber> m_subscribers;
+	std::thread m_thread;
+	std::atomic<bool> m_running{ false };
+
+	void thread_func();
+	void refresh();
 
 protected:
 	static void _bind_methods();
 
 public:
 	NeighbourhoodServer() = default;
-	~NeighbourhoodServer() override = default;
+	~NeighbourhoodServer() override {
+		if (m_running) {
+			m_running = false;
+			m_thread.join();
+		}
+	}
 
 	void subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data);
 	void unsubscribe(Node2D *p_node);

@@ -1,5 +1,9 @@
 #include "neighbourhood_server.h"
 
+#include <godot_cpp/core/print_string.hpp>
+
+#include <chrono>
+
 void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer", "data"), &NeighbourhoodServer::subscribe);
 	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourhoodServer::unsubscribe);
@@ -16,12 +20,41 @@ void NeighbourhoodServer::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
 }
 
+void NeighbourhoodServer::thread_func() {
+	while (m_running) {
+		auto next = std::chrono::steady_clock::now();
+
+		refresh();
+
+		if (refresh_intervall <= 0.0f) {
+			continue;
+		}
+		next += std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+				std::chrono::duration<float>(refresh_intervall));
+		std::this_thread::sleep_until(next);
+	}
+}
+
+void NeighbourhoodServer::refresh() {
+	print_line("[NeighbourhoodServer] Refresh");
+}
+
 void NeighbourhoodServer::subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data) {
 	m_subscribers[p_node] = { p_node, p_layer, p_data };
+
+	if (!m_running) {
+		m_running = true;
+		m_thread = std::thread(&NeighbourhoodServer::thread_func, this);
+	}
 }
 
 void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
 	m_subscribers.erase(p_node);
+
+	if (m_subscribers.empty() && m_running) {
+		m_running = false;
+		m_thread.join();
+	}
 }
 
 Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance) {

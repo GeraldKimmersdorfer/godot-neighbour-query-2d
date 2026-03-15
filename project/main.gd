@@ -9,6 +9,7 @@ var _velocities: Array[Vector2] = []
 
 func _ready() -> void:
 	var ns := NeighbourhoodServer
+	ns.refresh_intervall = 1.0
 	var viewport_size := get_viewport_rect().size
 	for i in dot_count:
 		var dot: Node2D = dot_template.instantiate()
