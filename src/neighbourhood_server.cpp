@@ -6,11 +6,12 @@
 
 #include <chrono>
 #include <cmath>
+#include <limits>
 
 void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer", "data"), &NeighbourhoodServer::subscribe);
 	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourhoodServer::unsubscribe);
-	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance"), &NeighbourhoodServer::get_next, DEFVAL(0.0f));
+	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance", "layer_mask"), &NeighbourhoodServer::get_next, DEFVAL(0.0f), DEFVAL(0xFFFFFFFF));
 	ClassDB::bind_method(D_METHOD("get_all", "position", "max_distance", "layer_mask"), &NeighbourhoodServer::get_all, DEFVAL(0.0f), DEFVAL(0xFFFFFFFF));
 
 	ClassDB::bind_method(D_METHOD("set_grid_size", "grid_size"), &NeighbourhoodServer::set_grid_size);
@@ -75,8 +76,62 @@ void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
 	m_subscribers.erase(p_node);
 }
 
-Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance) {
-	return Variant();
+Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
+	std::lock_guard<std::mutex> lock(m_grid_mutex);
+
+	int cx0 = static_cast<int>(std::floor(p_position.x / grid_size));
+	int cy0 = static_cast<int>(std::floor(p_position.y / grid_size));
+
+	float best_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
+	const Subscriber *best = nullptr;
+
+	for (int r = 0; ; r++) {
+		// Lower bound on world-space distance to any cell in ring r is (r-1)*grid_size.
+		// If that already exceeds best found, no closer result can exist.
+		if (r > 0) {
+			float min_ring_dist = static_cast<float>((r - 1) * grid_size);
+			if (min_ring_dist * min_ring_dist >= best_dist_sq) {
+				break;
+			}
+		}
+
+		// Also stop if the ring is entirely beyond p_max_distance.
+		if (p_max_distance > 0.0f && static_cast<float>(std::max(0, r - 1) * grid_size) > p_max_distance) {
+			break;
+		}
+
+		auto check = [&](int cx, int cy) {
+			auto it = m_grid.find(to_cell_key(cx, cy));
+			if (it == m_grid.end()) {
+				return;
+			}
+			for (const Subscriber &s : it->second) {
+				if ((s.layer & p_layer_mask) == 0) {
+					continue;
+				}
+				float d = s.position.distance_squared_to(p_position);
+				if (d < best_dist_sq) {
+					best_dist_sq = d;
+					best = &s;
+				}
+			}
+		};
+
+		if (r == 0) {
+			check(cx0, cy0);
+		} else {
+			for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
+				check(cx, cy0 - r);
+				check(cx, cy0 + r);
+			}
+			for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
+				check(cx0 - r, cy);
+				check(cx0 + r, cy);
+			}
+		}
+	}
+
+	return best ? best->data : Variant();
 }
 
 Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {

@@ -45,7 +45,7 @@ public:
 
 	void subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data);
 	void unsubscribe(Node2D *p_node);
-	Variant get_next(const Vector2 &p_position, float p_max_distance = 0.0f);
+	Variant get_next(const Vector2 &p_position, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF);
 	Array get_all(const Vector2 &p_position, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF);
 
 	void set_grid_size(int p_grid_size);

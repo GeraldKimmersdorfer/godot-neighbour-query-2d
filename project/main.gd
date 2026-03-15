@@ -2,11 +2,11 @@ extends Node2D
 
 @export var dot_template: PackedScene
 @export var dot_count: int = 1000
-@export var moving: bool = true
 
 var _dots: Array[Node2D] = []
 var _velocities: Array[Vector2] = []
 var _highlighted: Array[CanvasItem] = []
+var _closest_dot: Node2D = null
 
 @onready var _ns: NeighbourhoodServer = $NeighbourhoodServer
 
@@ -28,8 +28,6 @@ func _exit_tree() -> void:
 		_ns.unsubscribe(dot)
 
 func _process(delta: float) -> void:
-	if not moving:
-		return
 	var viewport_size := get_viewport_rect().size
 	for i in _dots.size():
 		var dot := _dots[i]
@@ -53,3 +51,9 @@ func _process(delta: float) -> void:
 		if dot:
 			dot.modulate = Color(1.0, 0.0, 0.0)
 			_highlighted.append(dot)
+
+	if _closest_dot:
+		(_closest_dot as CanvasItem).modulate = Color.WHITE
+	_closest_dot = _ns.get_next(get_global_mouse_position()) as Node2D
+	if _closest_dot:
+		(_closest_dot as CanvasItem).modulate = Color(0.0, 1.0, 0.0)
