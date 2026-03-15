@@ -24,12 +24,12 @@ void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
 	// stub
 }
 
-Ref<Neighbour> NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance) {
-	return Ref<Neighbour>();
+Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance) {
+	return Variant();
 }
 
-TypedArray<Neighbour> NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance) {
-	return TypedArray<Neighbour>();
+Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance) {
+	return Array();
 }
 
 void NeighbourhoodServer::set_grid_size(int p_grid_size) {

@@ -6,7 +6,6 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 
-#include "neighbour.h"
 #include "neighbourhood_server.h"
 
 using namespace godot;
@@ -18,7 +17,6 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
-	GDREGISTER_CLASS(Neighbour);
 	GDREGISTER_CLASS(NeighbourhoodServer);
 	neighbourhood_server_singleton = memnew(NeighbourhoodServer);
 	Engine::get_singleton()->register_singleton("NeighbourhoodServer", neighbourhood_server_singleton);

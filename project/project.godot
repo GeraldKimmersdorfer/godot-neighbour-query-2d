@@ -14,7 +14,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="godot cpp template"
+config/name="Godot Neighbourhood Server"
 run/main_scene="uid://didpfqa11i68r"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
@@ -26,4 +26,6 @@ window/size/viewport_height=900
 
 [rendering]
 
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.105882354, 0.105882354, 0.105882354, 1)
