@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://didpfqa11i68r"]
+
+[ext_resource type="Script" uid="uid://d0uyx2lxxs8vp" path="res://main.gd" id="1_ig7tw"]
+[ext_resource type="PackedScene" uid="uid://byiom0kxdemif" path="res://dot.tscn" id="2_0xm2m"]
+
+[node name="Main" type="Node2D" unique_id=608581577]
+script = ExtResource("1_ig7tw")
+dot_template = ExtResource("2_0xm2m")
+dot_count = 10000

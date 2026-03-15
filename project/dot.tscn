@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://byiom0kxdemif"]
+
+[ext_resource type="Script" uid="uid://dnqir8x74qfy8" path="res://dot.gd" id="1_swi4y"]
+
+[sub_resource type="Gradient" id="Gradient_l5yy6"]
+offsets = PackedFloat32Array(0, 0.560241, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_swi4y"]
+gradient = SubResource("Gradient_l5yy6")
+width = 8
+height = 8
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(0.5, 0)
+
+[node name="Dot" type="Sprite2D" unique_id=526248502]
+scale = Vector2(0.5, 0.5)
+texture = SubResource("GradientTexture2D_swi4y")
+script = ExtResource("1_swi4y")

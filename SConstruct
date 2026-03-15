@@ -5,7 +5,7 @@ import sys
 from methods import print_error
 
 
-libname = "EXTENSION-NAME"
+libname = "neighbourhood-server"
 projectdir = "project"
 
 localEnv = Environment(tools=["default"], PLATFORM="")
