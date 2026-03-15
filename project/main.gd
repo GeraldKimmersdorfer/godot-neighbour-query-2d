@@ -6,11 +6,12 @@ extends Node2D
 
 var _dots: Array[Node2D] = []
 var _velocities: Array[Vector2] = []
+var _highlighted: Array[CanvasItem] = []
 
 @onready var _ns: NeighbourhoodServer = $NeighbourhoodServer
 
 func _ready() -> void:
-	_ns.refresh_intervall = 1.0
+	_ns.refresh_intervall = 0
 	var viewport_size := get_viewport_rect().size
 	for i in dot_count:
 		var dot: Node2D = dot_template.instantiate()
@@ -41,3 +42,14 @@ func _process(delta: float) -> void:
 			vel.y = -vel.y
 			dot.position.y = clamp(dot.position.y, 0.0, viewport_size.y)
 		_velocities[i] = vel
+
+	for dot in _highlighted:
+		dot.modulate = Color.WHITE
+	_highlighted.clear()
+
+	var neighbours := _ns.get_all(get_global_mouse_position(), 100.0)
+	for n in neighbours:
+		var dot := n as CanvasItem
+		if dot:
+			dot.modulate = Color(1.0, 0.0, 0.0)
+			_highlighted.append(dot)

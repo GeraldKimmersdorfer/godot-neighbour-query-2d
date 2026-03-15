@@ -1,15 +1,17 @@
 #include "neighbourhood_server.h"
 
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/core/print_string.hpp>
 
+#include <chrono>
 #include <cmath>
 
 void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer", "data"), &NeighbourhoodServer::subscribe);
 	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourhoodServer::unsubscribe);
 	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance"), &NeighbourhoodServer::get_next, DEFVAL(0.0f));
-	ClassDB::bind_method(D_METHOD("get_all", "position", "max_distance"), &NeighbourhoodServer::get_all, DEFVAL(0.0f));
+	ClassDB::bind_method(D_METHOD("get_all", "position", "max_distance", "layer_mask"), &NeighbourhoodServer::get_all, DEFVAL(0.0f), DEFVAL(0xFFFFFFFF));
 
 	ClassDB::bind_method(D_METHOD("set_grid_size", "grid_size"), &NeighbourhoodServer::set_grid_size);
 	ClassDB::bind_method(D_METHOD("get_grid_size"), &NeighbourhoodServer::get_grid_size);
@@ -23,22 +25,7 @@ void NeighbourhoodServer::_bind_methods() {
 
 void NeighbourhoodServer::_ready() {
 	set_physics_process(true);
-}
-
-void NeighbourhoodServer::_exit_tree() {
-	stop_thread();
-}
-
-void NeighbourhoodServer::stop_thread() {
-	if (!m_thread.joinable()) {
-		return;
-	}
-	{
-		std::lock_guard<std::mutex> lock(m_cv_mutex);
-		m_running = false;
-	}
-	m_cv.notify_all();
-	m_thread.join();
+	print_line(vformat("[NeighbourhoodServer] Main thread ID: %d", OS::get_singleton()->get_thread_caller_id()));
 }
 
 void NeighbourhoodServer::_physics_process(double p_delta) {
@@ -50,23 +37,8 @@ void NeighbourhoodServer::_physics_process(double p_delta) {
 		return;
 	}
 	m_time_since_refresh = 0.0;
-
-	std::vector<Subscriber> snapshot;
-	{
-		std::lock_guard<std::mutex> lock(m_subscribers_mutex);
-		snapshot.reserve(m_subscribers.size());
-		for (auto &[node, subscriber] : m_subscribers) {
-			subscriber.position = node->get_global_position();
-			snapshot.push_back(subscriber);
-		}
-	}
-
-	{
-		std::lock_guard<std::mutex> lock(m_cv_mutex);
-		m_snapshot = std::move(snapshot);
-		m_refresh_pending = true;
-	}
-	m_cv.notify_one();
+	//print_line(vformat("[NeighbourhoodServer] _physics_process thread ID: %d", OS::get_singleton()->get_thread_caller_id()));
+	refresh();
 }
 
 uint64_t NeighbourhoodServer::to_cell_key(int cell_x, int cell_y) {
@@ -74,28 +46,15 @@ uint64_t NeighbourhoodServer::to_cell_key(int cell_x, int cell_y) {
 		   static_cast<uint64_t>(static_cast<uint32_t>(cell_y));
 }
 
-void NeighbourhoodServer::thread_func() {
-	while (true) {
-		std::vector<Subscriber> snapshot;
-		{
-			std::unique_lock<std::mutex> lock(m_cv_mutex);
-			m_cv.wait(lock, [this] { return m_refresh_pending || !m_running; });
-			if (!m_running) {
-				break;
-			}
-			snapshot = std::move(m_snapshot);
-			m_refresh_pending = false;
-		}
-		build_grid(std::move(snapshot));
-	}
-}
+void NeighbourhoodServer::refresh() {
+	//auto t_start = std::chrono::steady_clock::now();
 
-void NeighbourhoodServer::build_grid(std::vector<Subscriber> p_snapshot) {
 	std::unordered_map<uint64_t, std::vector<Subscriber>> grid;
-	for (Subscriber &s : p_snapshot) {
-		int cx = static_cast<int>(std::floor(s.position.x / grid_size));
-		int cy = static_cast<int>(std::floor(s.position.y / grid_size));
-		grid[to_cell_key(cx, cy)].push_back(std::move(s));
+	for (auto &[node, subscriber] : m_subscribers) {
+		subscriber.position = node->get_global_position();
+		int cx = static_cast<int>(std::floor(subscriber.position.x / grid_size));
+		int cy = static_cast<int>(std::floor(subscriber.position.y / grid_size));
+		grid[to_cell_key(cx, cy)].push_back(subscriber);
 	}
 
 	{
@@ -103,41 +62,52 @@ void NeighbourhoodServer::build_grid(std::vector<Subscriber> p_snapshot) {
 		m_grid = std::move(grid);
 	}
 
-	print_line("[NeighbourhoodServer] Refresh");
+	//double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count();
+	//print_line(vformat("[NeighbourhoodServer] Refresh: built %d cells from %d subscribers in %.3f ms",
+	//		m_grid.size(), m_subscribers.size(), ms));
 }
 
 void NeighbourhoodServer::subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data) {
-	bool start_thread = false;
-	{
-		std::lock_guard<std::mutex> lock(m_subscribers_mutex);
-		m_subscribers[p_node] = { p_node, p_layer, p_data };
-		start_thread = !m_thread.joinable();
-	}
-	if (start_thread) {
-		std::lock_guard<std::mutex> lock(m_cv_mutex);
-		m_running = true;
-		m_thread = std::thread(&NeighbourhoodServer::thread_func, this);
-	}
+	m_subscribers[p_node] = { p_node, p_layer, p_data };
 }
 
 void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
-	bool should_stop = false;
-	{
-		std::lock_guard<std::mutex> lock(m_subscribers_mutex);
-		m_subscribers.erase(p_node);
-		should_stop = m_subscribers.empty();
-	}
-	if (should_stop) {
-		stop_thread();
-	}
+	m_subscribers.erase(p_node);
 }
 
 Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance) {
 	return Variant();
 }
 
-Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance) {
-	return Array();
+Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
+	std::lock_guard<std::mutex> lock(m_grid_mutex);
+	Array result;
+	float max_dist_sq = p_max_distance * p_max_distance;
+
+	int min_cx = static_cast<int>(std::floor((p_position.x - p_max_distance) / grid_size));
+	int max_cx = static_cast<int>(std::floor((p_position.x + p_max_distance) / grid_size));
+	int min_cy = static_cast<int>(std::floor((p_position.y - p_max_distance) / grid_size));
+	int max_cy = static_cast<int>(std::floor((p_position.y + p_max_distance) / grid_size));
+
+	for (int cy = min_cy; cy <= max_cy; cy++) {
+		for (int cx = min_cx; cx <= max_cx; cx++) {
+			auto it = m_grid.find(to_cell_key(cx, cy));
+			if (it == m_grid.end()) {
+				continue;
+			}
+			for (const Subscriber &s : it->second) {
+				if ((s.layer & p_layer_mask) == 0) {
+					continue;
+				}
+				if (s.position.distance_squared_to(p_position) > max_dist_sq) {
+					continue;
+				}
+				result.push_back(s.data);
+			}
+		}
+	}
+
+	return result;
 }
 
 void NeighbourhoodServer::set_grid_size(int p_grid_size) {

@@ -6,10 +6,7 @@
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/vector2.hpp>
 
-#include <atomic>
-#include <condition_variable>
 #include <mutex>
-#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -30,38 +27,26 @@ class NeighbourhoodServer : public Node {
 	double m_time_since_refresh = 0.0;
 
 	std::unordered_map<Node2D *, Subscriber> m_subscribers;
-	std::mutex m_subscribers_mutex;
-
 	std::unordered_map<uint64_t, std::vector<Subscriber>> m_grid;
 	std::mutex m_grid_mutex;
 
-	std::thread m_thread;
-	std::condition_variable m_cv;
-	std::mutex m_cv_mutex;
-	bool m_running = false;
-	bool m_refresh_pending = false;
-	std::vector<Subscriber> m_snapshot;
-
 	static uint64_t to_cell_key(int cell_x, int cell_y);
-	void thread_func();
-	void build_grid(std::vector<Subscriber> p_snapshot);
-	void stop_thread();
+	void refresh();
 
 protected:
 	static void _bind_methods();
 
 public:
 	NeighbourhoodServer() = default;
-	~NeighbourhoodServer() override { stop_thread(); }
+	~NeighbourhoodServer() override = default;
 
 	void _ready() override;
-	void _exit_tree() override;
 	void _physics_process(double p_delta) override;
 
 	void subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data);
 	void unsubscribe(Node2D *p_node);
 	Variant get_next(const Vector2 &p_position, float p_max_distance = 0.0f);
-	Array get_all(const Vector2 &p_position, float p_max_distance = 0.0f);
+	Array get_all(const Vector2 &p_position, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF);
 
 	void set_grid_size(int p_grid_size);
 	int get_grid_size() const;
