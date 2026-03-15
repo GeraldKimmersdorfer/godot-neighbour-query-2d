@@ -7,3 +7,5 @@
 script = ExtResource("1_ig7tw")
 dot_template = ExtResource("2_0xm2m")
 dot_count = 5000
+
+[node name="NeighbourhoodServer" type="NeighbourhoodServer" parent="." unique_id=588930159]
