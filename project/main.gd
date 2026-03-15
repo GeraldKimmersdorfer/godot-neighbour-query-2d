@@ -8,6 +8,7 @@ var _dots: Array[Node2D] = []
 var _velocities: Array[Vector2] = []
 
 func _ready() -> void:
+	var ns := NeighbourhoodServer
 	var viewport_size := get_viewport_rect().size
 	for i in dot_count:
 		var dot: Node2D = dot_template.instantiate()
@@ -17,6 +18,12 @@ func _ready() -> void:
 		var speed := randf_range(20.0, 120.0)
 		var angle := randf() * TAU
 		_velocities.append(Vector2(cos(angle), sin(angle)) * speed)
+		ns.subscribe(dot, 1, dot)
+
+func _exit_tree() -> void:
+	var ns := NeighbourhoodServer
+	for dot in _dots:
+		ns.unsubscribe(dot)
 
 func _process(delta: float) -> void:
 	if not moving:

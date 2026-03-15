@@ -1,7 +1,7 @@
 #include "neighbourhood_server.h"
 
 void NeighbourhoodServer::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("subscribe", "node", "data"), &NeighbourhoodServer::subscribe);
+	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer", "data"), &NeighbourhoodServer::subscribe);
 	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourhoodServer::unsubscribe);
 	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance"), &NeighbourhoodServer::get_next, DEFVAL(0.0f));
 	ClassDB::bind_method(D_METHOD("get_all", "position", "max_distance"), &NeighbourhoodServer::get_all, DEFVAL(0.0f));
@@ -16,12 +16,12 @@ void NeighbourhoodServer::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
 }
 
-void NeighbourhoodServer::subscribe(Node2D *p_node, const Variant &p_data) {
-	// stub
+void NeighbourhoodServer::subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data) {
+	m_subscribers[p_node] = { p_node, p_layer, p_data };
 }
 
 void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
-	// stub
+	m_subscribers.erase(p_node);
 }
 
 Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance) {
