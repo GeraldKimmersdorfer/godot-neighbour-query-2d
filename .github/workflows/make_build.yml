@@ -37,18 +37,46 @@ jobs:
         float-precision: [single]
 
     runs-on: ${{ matrix.target.os }}
+
     steps:
       # Clone this repository
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          submodules: true
+          submodules: recursive
+          fetch-depth: 0
+
+      # Get the current godot-cpp submodule commit for cache invalidation
+      - name: Get godot-cpp commit
+        id: godotcpp
+        shell: bash
+        run: |
+          echo "commit=$(git -C godot-cpp rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          
+      # Setup Python for SCons
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install SCons
+        run: pip install scons
 
       # Add linux x86_32 toolchain
       - name: Install multilib support
         if: ${{ matrix.target.platform == 'linux' && matrix.target.arch == 'x86_32' }}
         run: |
           sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
+
+      # Cache godot-cpp build artifacts
+      # This significantly speeds up CI because godot-cpp compilation is expensive
+      - name: Cache godot-cpp
+        uses: actions/cache@v4
+        with:
+          path: |
+            godot-cpp/bin
+            godot-cpp/.scons_cache
+          key: godot-cpp-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.target-type }}-${{ steps.godotcpp.outputs.commit }}
 
       # Setup dependencies
       - name: Setup godot-cpp
@@ -57,26 +85,22 @@ jobs:
           platform: ${{ matrix.target.platform }}
           em-version: 3.1.62
 
-      # Build GDExtension (with caches)
-
-      - name: Restore .scons_cache
-        uses: ./godot-cpp/.github/actions/godot-cache-restore
-        with:
-          scons-cache: ${{ github.workspace }}/.scons-cache/
-          cache-name: ${{ matrix.target.platform }}_${{ matrix.target.arch }}_${{ matrix.float-precision }}_${{ matrix.target-type }}
-
-      - name: Build GDExtension Debug Build
+      # Clean up previous build artifacts to avoid stale binaries
+      - name: Clean previous extension builds
         shell: sh
-        env:
-          SCONS_CACHE: ${{ github.workspace }}/.scons-cache/
         run: |
-          scons target=${{ matrix.target-type }} platform=${{ matrix.target.platform }} arch=${{ matrix.target.arch }} precision=${{ matrix.float-precision }}
+          rm -rf bin
+          rm -f .sconsign.dblite
 
-      - name: Save .scons_cache
-        uses: ./godot-cpp/.github/actions/godot-cache-save
-        with:
-          scons-cache: ${{ github.workspace }}/.scons-cache/
-          cache-name: ${{ matrix.target.platform }}_${{ matrix.target.arch }}_${{ matrix.float-precision }}_${{ matrix.target-type }}
+      # Build GDExtension (with caches)
+      - name: Build GDExtension
+        shell: sh
+        run: |
+          scons -j$(nproc) \
+            target=${{ matrix.target-type }} \
+            platform=${{ matrix.target.platform }} \
+            arch=${{ matrix.target.arch }} \
+            precision=${{ matrix.float-precision }}
 
       # Clean up compilation files
       - name: Windows - Delete compilation files
@@ -87,7 +111,7 @@ jobs:
 
       # Upload the build
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: neighbourhood-server-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.float-precision }}-${{ matrix.target-type }}
           path: |
