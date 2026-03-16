@@ -32,6 +32,11 @@ class NeighbourhoodServer : public Node {
 	int grid_size = 128;
 	float refresh_intervall = 0.1f;
 	double m_time_since_refresh = 0.0;
+	bool use_global_position = true;
+
+	// Note: get_global_position() accounts for ~80% of refresh time; function pointer avoids
+	// a per-subscriber branch so the choice is made once in the setter, not inside the hot loop.
+	Vector2 (Node2D::*m_get_position)() const = &Node2D::get_global_position;
 
 	std::unordered_map<Node2D *, Subscriber> m_subscribers;
 	std::unordered_map<uint64_t, std::vector<Subscriber>> m_grid;
@@ -64,6 +69,9 @@ public:
 
 	void set_refresh_intervall(float p_refresh_intervall);
 	float get_refresh_intervall() const;
+
+	void set_use_global_position(bool p_use_global_position);
+	bool get_use_global_position() const;
 
 #if DEBUG_GRID_INFORMATION
 	Array get_last_queried_cells() const;

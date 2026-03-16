@@ -22,17 +22,12 @@ var _avg_get_next_ms: float = 0.0
 
 func _ready() -> void:
 	_debug_cells = _ns.has_method("get_last_queried_cells")
-	_ns.refresh_intervall = 0.5
-	_ns.grid_size = 64
 	_grid.grid_size = _ns.grid_size
 	get_viewport().size_changed.connect(_on_viewport_size_changed)
 	var bounds := _get_bounds()
 	for i in dot_count:
 		var dot: Node2D = dot_template.instantiate()
 		dot.position = Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
-		var speed := randf_range(20.0, 120.0)
-		var angle := randf() * TAU
-		dot.velocity = Vector2(cos(angle), sin(angle)) * speed
 		dot.bounds = bounds
 		add_child(dot)
 		_dots.append(dot)
@@ -43,9 +38,11 @@ func _exit_tree() -> void:
 		_ns.unsubscribe(dot)
 
 func _get_bounds() -> Rect2:
-	var margin := float(_ns.grid_size)
+	var gs := float(_ns.grid_size)
 	var viewport_size := get_viewport_rect().size
-	return Rect2(Vector2(margin, margin), viewport_size - Vector2(margin, margin) * 2.0)
+	# Snap to the last fully visible cell boundary, then pad by one cell on each side
+	var snapped := Vector2(floor(viewport_size.x / gs) * gs, floor(viewport_size.y / gs) * gs)
+	return Rect2(Vector2(gs, gs), snapped - Vector2(gs * 2.0, gs * 2.0))
 
 func _on_viewport_size_changed() -> void:
 	var bounds := _get_bounds()

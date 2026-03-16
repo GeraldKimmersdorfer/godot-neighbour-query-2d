@@ -5,6 +5,11 @@ extends Sprite2D
 
 var velocity: Vector2
 
+func _ready() -> void:
+	var speed := randf_range(20.0, 120.0)
+	var angle := randf() * TAU
+	velocity = Vector2(cos(angle), sin(angle)) * speed
+
 func _process(delta: float) -> void:
 	if not moving:
 		return

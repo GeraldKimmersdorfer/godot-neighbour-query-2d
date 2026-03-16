@@ -20,8 +20,12 @@ void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_refresh_intervall", "refresh_intervall"), &NeighbourhoodServer::set_refresh_intervall);
 	ClassDB::bind_method(D_METHOD("get_refresh_intervall"), &NeighbourhoodServer::get_refresh_intervall);
 
+	ClassDB::bind_method(D_METHOD("set_use_global_position", "use_global_position"), &NeighbourhoodServer::set_use_global_position);
+	ClassDB::bind_method(D_METHOD("get_use_global_position"), &NeighbourhoodServer::get_use_global_position);
+
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "grid_size"), "set_grid_size", "get_grid_size");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_global_position"), "set_use_global_position", "get_use_global_position");
 
 #if DEBUG_GRID_INFORMATION
 	ClassDB::bind_method(D_METHOD("get_last_queried_cells"), &NeighbourhoodServer::get_last_queried_cells);
@@ -57,8 +61,14 @@ void NeighbourhoodServer::refresh() {
 	// Note: tried reusing a persistent m_grid_build map (clear()+swap) to avoid allocations
 	// no measurable performance gain in practice, reverted to simpler method.
 	std::unordered_map<uint64_t, std::vector<Subscriber>> grid;
+
+	auto t_pos = std::chrono::steady_clock::now();
 	for (auto &[node, subscriber] : m_subscribers) {
-		subscriber.position = node->get_global_position();
+		subscriber.position = (node->*m_get_position)();
+	}
+	double ms_pos = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_pos).count();
+
+	for (auto &[node, subscriber] : m_subscribers) {
 		int cx = static_cast<int>(std::floor(subscriber.position.x / grid_size));
 		int cy = static_cast<int>(std::floor(subscriber.position.y / grid_size));
 		grid[to_cell_key(cx, cy)].push_back(subscriber);
@@ -70,8 +80,8 @@ void NeighbourhoodServer::refresh() {
 	}
 
 	double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count();
-	print_line(vformat("[NeighbourhoodServer] Refresh: built %d cells from %d subscribers in %.3f ms",
-			m_grid.size(), m_subscribers.size(), ms));
+	print_line(vformat("[NeighbourhoodServer] Refresh: %.3f ms total (%.3f ms get_global_position, %d subscribers)",
+			ms, ms_pos, m_subscribers.size()));
 }
 
 void NeighbourhoodServer::subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data) {
@@ -221,4 +231,13 @@ void NeighbourhoodServer::set_refresh_intervall(float p_refresh_intervall) {
 
 float NeighbourhoodServer::get_refresh_intervall() const {
 	return refresh_intervall;
+}
+
+void NeighbourhoodServer::set_use_global_position(bool p_use_global_position) {
+	use_global_position = p_use_global_position;
+	m_get_position = use_global_position ? &Node2D::get_global_position : &Node2D::get_position;
+}
+
+bool NeighbourhoodServer::get_use_global_position() const {
+	return use_global_position;
 }

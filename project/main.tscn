@@ -19,6 +19,9 @@ dot_template = ExtResource("2_0xm2m")
 dot_count = 10000
 
 [node name="NeighbourhoodServer" type="NeighbourhoodServer" parent="." unique_id=588930159]
+grid_size = 256
+refresh_intervall = 1.0
+use_global_position = false
 process_thread_group = 2
 process_thread_group_order = 0
 process_thread_messages = 0
