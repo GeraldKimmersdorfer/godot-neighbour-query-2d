@@ -15,7 +15,7 @@ var _debug_cells: bool = false
 var _query_radius: float = 100.0
 var _debug_info: Dictionary = {}
 
-const _AVG_ALPHA := 0.05  # exponential moving average smoothing factor
+const _AVG_ALPHA := 0.05  # running average smoothing factor
 var _avg_get_all_ms: float = 0.0
 var _avg_get_next_ms: float = 0.0
 

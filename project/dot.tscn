@@ -15,6 +15,5 @@ fill_from = Vector2(0.5, 0.5)
 fill_to = Vector2(0.5, 0)
 
 [node name="Dot" type="Sprite2D" unique_id=526248502]
-scale = Vector2(0.5, 0.5)
 texture = SubResource("GradientTexture2D_swi4y")
 script = ExtResource("1_swi4y")

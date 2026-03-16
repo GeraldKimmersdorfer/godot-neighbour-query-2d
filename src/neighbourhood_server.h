@@ -1,6 +1,6 @@
 #pragma once
 
-#define DEBUG_INFORMATION 1
+#define DEBUG_INFORMATION 0
 
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/node2d.hpp>

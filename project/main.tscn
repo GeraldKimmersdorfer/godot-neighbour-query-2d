@@ -16,7 +16,7 @@ script = ExtResource("1_ig7tw")
 _grid = NodePath("Grid")
 _info_label = NodePath("InfoLabel")
 dot_template = ExtResource("2_0xm2m")
-dot_count = 10000
+dot_count = 5000
 
 [node name="InfoLabel" type="Label" parent="." unique_id=524208133]
 z_index = 1
@@ -25,11 +25,11 @@ offset_top = 10.0
 offset_right = 92.0
 offset_bottom = 33.0
 theme_override_styles/normal = SubResource("StyleBoxFlat_h2yge")
-text = "asdasdasd"
+text = "InfoBox"
 
 [node name="NeighbourhoodServer" type="NeighbourhoodServer" parent="." unique_id=588930159]
 grid_size = 64
-refresh_intervall = 1.0
+refresh_intervall = 0.0
 use_global_position = false
 
 [node name="Grid" type="Node2D" parent="." unique_id=1157301185]
