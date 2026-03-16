@@ -1,9 +1,12 @@
 # For syntax, see https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
 # This workflow is triggered manually on the "Actions" tab on GitHub, and can be used to create releases.
 
-name: Make a GDExtension build for all supported platforms
+name: Compile Neighbourhood-Server for all platforms
 on:
   workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -16,19 +19,19 @@ jobs:
         target:
           [
             { platform: linux, arch: x86_64, os: ubuntu-22.04 },
-            { platform: linux, arch: x86_32, os: ubuntu-22.04 },
-            { platform: linux, arch: arm64, os: ubuntu-22.04-arm },
-            { platform: linux, arch: arm32, os: ubuntu-22.04-arm },
+            #{ platform: linux, arch: x86_32, os: ubuntu-22.04 },
+            #{ platform: linux, arch: arm64, os: ubuntu-22.04-arm },
+            #{ platform: linux, arch: arm32, os: ubuntu-22.04-arm },
             { platform: windows, arch: x86_64, os: windows-latest },
-            { platform: windows, arch: x86_32, os: windows-latest },
-            { platform: windows, arch: arm64, os: windows-latest },
-            { platform: macos, arch: universal, os: macos-latest },
-            { platform: android, arch: x86_64, os: ubuntu-22.04 },
-            { platform: android, arch: x86_32, os: ubuntu-22.04 },
-            { platform: android, arch: arm64, os: ubuntu-22.04 },
-            { platform: android, arch: arm32, os: ubuntu-22.04 },
-            { platform: ios, arch: arm64, os: macos-latest },
-            { platform: web, arch: wasm32, os: ubuntu-22.04 },
+            #{ platform: windows, arch: x86_32, os: windows-latest },
+            #{ platform: windows, arch: arm64, os: windows-latest },
+            #{ platform: macos, arch: universal, os: macos-latest },
+            #{ platform: android, arch: x86_64, os: ubuntu-22.04 },
+            #{ platform: android, arch: x86_32, os: ubuntu-22.04 },
+            #{ platform: android, arch: arm64, os: ubuntu-22.04 },
+            #{ platform: android, arch: arm32, os: ubuntu-22.04 },
+            #{ platform: ios, arch: arm64, os: macos-latest },
+            #{ platform: web, arch: wasm32, os: ubuntu-22.04 },
           ]
         target-type: [template_debug, template_release]
         float-precision: [single]
@@ -86,11 +89,11 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: godot-cpp-template-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.float-precision }}-${{ matrix.target-type }}
+          name: neighbourhood-server-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.float-precision }}-${{ matrix.target-type }}
           path: |
             ${{ github.workspace }}/bin/**
 
-  # Merges all the build artifacts together into a single godot-cpp-template artifact.
+  # Merges all the build artifacts together into a single neighbourhood-server artifact.
   # If you comment out this step, all the builds will be uploaded individually.
   merge:
     runs-on: ubuntu-22.04
@@ -99,6 +102,6 @@ jobs:
       - name: Merge Artifacts
         uses: actions/upload-artifact/merge@v4
         with:
-          name: godot-cpp-template
-          pattern: godot-cpp-template-*
+          name: neighbourhood-server
+          pattern: neighbourhood-server-*
           delete-merged: true

@@ -1,52 +1,60 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="NeighbourhoodServer" inherits="Object" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+<class name="NeighbourhoodServer" inherits="Node" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Singleton server for spatial neighbourhood queries on [Node2D] objects.
+		Node that provides fast spatial neighbourhood queries over subscribed [Node2D] instances.
 	</brief_description>
 	<description>
-		NeighbourhoodServer is an autoloaded singleton that allows [Node2D] objects to subscribe with associated data. It provides efficient spatial queries to retrieve the nearest neighbour or all neighbours within a given distance.
+		[NeighbourhoodServer] maintains a uniform spatial grid that is rebuilt at a configurable interval during physics processing. [Node2D] instances register themselves via [method subscribe] and can be queried by world position using [method get_next] and [method get_all].
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="get_all">
-			<return type="Neighbour[]" />
-			<param index="0" name="position" type="Vector2" />
-			<param index="1" name="max_distance" type="float" default="0.0" />
-			<description>
-				Returns all subscribed neighbours near [param position]. If [param max_distance] is greater than [code]0.0[/code], only neighbours within that distance are included.
-			</description>
-		</method>
-		<method name="get_next">
-			<return type="Neighbour" />
-			<param index="0" name="position" type="Vector2" />
-			<param index="1" name="max_distance" type="float" default="0.0" />
-			<description>
-				Returns the nearest subscribed neighbour to [param position]. If [param max_distance] is greater than [code]0.0[/code], only considers neighbours within that distance. Returns [code]null[/code] if none are found.
-			</description>
-		</method>
 		<method name="subscribe">
 			<return type="void" />
 			<param index="0" name="node" type="Node2D" />
-			<param index="1" name="data" type="Variant" />
+			<param index="1" name="layer" type="int" />
+			<param index="2" name="data" type="Variant" />
 			<description>
-				Subscribes [param node] to the NeighbourhoodServer with the given [param data]. The node can then be found by spatial queries.
+				Registers [param node] with a collision [param layer] bitmask and an arbitrary [param data] payload. If [param node] is already subscribed its entry is overwritten.
 			</description>
 		</method>
 		<method name="unsubscribe">
 			<return type="void" />
 			<param index="0" name="node" type="Node2D" />
 			<description>
-				Removes [param node] from the NeighbourhoodServer so it is no longer returned by spatial queries.
+				Removes [param node] from the server so it is no longer returned by spatial queries. Safe to omit if the node is about to be freed — stale entries are cleaned up automatically on the next refresh.
+			</description>
+		</method>
+		<method name="get_next">
+			<return type="Variant" />
+			<param index="0" name="position" type="Vector2" />
+			<param index="1" name="max_distance" type="float" default="0.0" />
+			<param index="2" name="layer_mask" type="int" default="4294967295" />
+			<description>
+				Returns the data payload of the nearest subscriber to [param position] whose layer matches [param layer_mask]. Returns [code]null[/code] if no match is found.
+				[param max_distance] limits the search radius in world units. Use [code]0.0[/code] for unlimited range.
+			</description>
+		</method>
+		<method name="get_all">
+			<return type="Array" />
+			<param index="0" name="position" type="Vector2" />
+			<param index="1" name="max_distance" type="float" default="0.0" />
+			<param index="2" name="layer_mask" type="int" default="4294967295" />
+			<description>
+				Returns an [Array] of data payloads for all subscribers within [param max_distance] of [param position] whose layer matches [param layer_mask].
+				Unlike [method get_next], [param max_distance] must be set explicitly — passing [code]0.0[/code] returns an empty array.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="grid_size" type="int" setter="set_grid_size" getter="get_grid_size" default="128">
-			The size of each grid cell used for spatial partitioning.
+			Width and height of each spatial grid cell in world units. Smaller values improve query precision at the cost of more cells to manage; larger values reduce overhead but increase the number of subscribers checked per query. A good starting point is the average interaction radius of your queries.
 		</member>
 		<member name="refresh_intervall" type="float" setter="set_refresh_intervall" getter="get_refresh_intervall" default="0.1">
-			The time interval (in seconds) between grid refreshes.
+			Minimum time in seconds between grid rebuilds. Set to [code]0.0[/code] to rebuild every physics frame. Higher values reduce CPU cost at the expense of query freshness.
+		</member>
+		<member name="use_global_position" type="bool" setter="set_use_global_position" getter="get_use_global_position" default="true">
+			When [code]true[/code] (default), subscriber positions are read via [method Node2D.get_global_position]. Set to [code]false[/code] to use [method Node2D.get_position] (local space), which is significantly faster when all subscribers share the same parent and no global transform traversal is needed.
 		</member>
 	</members>
 </class>

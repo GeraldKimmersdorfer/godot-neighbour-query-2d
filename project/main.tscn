@@ -2,8 +2,36 @@
 
 [ext_resource type="Script" uid="uid://d0uyx2lxxs8vp" path="res://main.gd" id="1_ig7tw"]
 [ext_resource type="PackedScene" uid="uid://byiom0kxdemif" path="res://dot.tscn" id="2_0xm2m"]
+[ext_resource type="Script" uid="uid://c6xejb65tofh" path="res://grid.gd" id="3_h2yge"]
 
-[node name="Main" type="Node2D" unique_id=608581577]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_h2yge"]
+bg_color = Color(0, 0, 0, 0.9019608)
+expand_margin_left = 10.0
+expand_margin_top = 10.0
+expand_margin_right = 10.0
+expand_margin_bottom = 10.0
+
+[node name="Main" type="Node2D" unique_id=608581577 node_paths=PackedStringArray("_grid", "_info_label")]
 script = ExtResource("1_ig7tw")
+_grid = NodePath("Grid")
+_info_label = NodePath("InfoLabel")
 dot_template = ExtResource("2_0xm2m")
 dot_count = 5000
+
+[node name="InfoLabel" type="Label" parent="." unique_id=524208133]
+z_index = 1
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 92.0
+offset_bottom = 33.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_h2yge")
+text = "InfoBox"
+
+[node name="NeighbourhoodServer" type="NeighbourhoodServer" parent="." unique_id=588930159]
+grid_size = 64
+refresh_intervall = 0.0
+use_global_position = false
+
+[node name="Grid" type="Node2D" parent="." unique_id=1157301185]
+script = ExtResource("3_h2yge")
+grid_size = 236

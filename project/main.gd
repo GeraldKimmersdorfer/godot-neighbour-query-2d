@@ -1,35 +1,133 @@
 extends Node2D
 
+@export_group("Scene Controls")
+@export var _grid: Grid
+@export var _info_label: Label
+
+@export_group("")
 @export var dot_template: PackedScene
 @export var dot_count: int = 1000
-@export var moving: bool = true
 
 var _dots: Array[Node2D] = []
-var _velocities: Array[Vector2] = []
+var _highlighted: Array[CanvasItem] = []
+var _closest_dot: Node2D = null
+var _debug_cells: bool = false
+var _query_radius: float = 100.0
+var _debug_info: Dictionary = {}
+
+const _AVG_ALPHA := 0.05  # running average smoothing factor
+var _avg_get_all_ms: float = 0.0
+var _avg_get_next_ms: float = 0.0
+
+@onready var _ns: NeighbourhoodServer = $NeighbourhoodServer
 
 func _ready() -> void:
-	var viewport_size := get_viewport_rect().size
+	_debug_cells = _ns.has_method("get_last_queried_cells")
+	if _ns.has_signal("debug_info"):
+		_ns.debug_info.connect(_on_ns_debug_info)
+	_grid.grid_size = _ns.grid_size
+	get_viewport().size_changed.connect(_on_viewport_size_changed)
+	var bounds := _get_bounds()
 	for i in dot_count:
 		var dot: Node2D = dot_template.instantiate()
-		dot.position = Vector2(randf() * viewport_size.x, randf() * viewport_size.y)
+		dot.position = Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
+		dot.bounds = bounds
 		add_child(dot)
 		_dots.append(dot)
-		var speed := randf_range(20.0, 120.0)
-		var angle := randf() * TAU
-		_velocities.append(Vector2(cos(angle), sin(angle)) * speed)
+		_ns.subscribe(dot, 1, dot)
 
-func _process(delta: float) -> void:
-	if not moving:
-		return
+func _exit_tree() -> void:
+	for dot in _dots:
+		_ns.unsubscribe(dot)
+
+func _get_bounds() -> Rect2:
+	var gs := float(_ns.grid_size)
 	var viewport_size := get_viewport_rect().size
-	for i in _dots.size():
-		var dot := _dots[i]
-		var vel := _velocities[i]
-		dot.position += vel * delta
-		if dot.position.x < 0.0 or dot.position.x > viewport_size.x:
-			vel.x = -vel.x
-			dot.position.x = clamp(dot.position.x, 0.0, viewport_size.x)
-		if dot.position.y < 0.0 or dot.position.y > viewport_size.y:
-			vel.y = -vel.y
-			dot.position.y = clamp(dot.position.y, 0.0, viewport_size.y)
-		_velocities[i] = vel
+	# Snap to the last fully visible cell boundary, then pad by one cell on each side
+	var snapped := Vector2(floor(viewport_size.x / gs) * gs, floor(viewport_size.y / gs) * gs)
+	return Rect2(Vector2(gs, gs), snapped - Vector2(gs * 2.0, gs * 2.0))
+
+func _on_viewport_size_changed() -> void:
+	var bounds := _get_bounds()
+	for dot in _dots:
+		dot.bounds = bounds
+
+func _on_ns_debug_info(name: String, value: Variant) -> void:
+	_debug_info[name] = value
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_query_radius = _query_radius + 10.0
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_query_radius = maxf(_query_radius - 10.0, 10.0)
+
+func _spawn_dot() -> void:
+	var bounds := _get_bounds()
+	var dot: Node2D = dot_template.instantiate()
+	dot.position = Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
+	dot.bounds = bounds
+	add_child(dot)
+	_dots.append(dot)
+	_ns.subscribe(dot, 1, dot)
+
+func _remove_dot(dot: Node2D, call_unsubscribe: bool) -> void:
+	_dots.erase(dot)
+	if _closest_dot == dot:
+		_closest_dot = null
+	_highlighted.erase(dot)
+	if call_unsubscribe:
+		_ns.unsubscribe(dot)
+	dot.queue_free()
+
+func _stress_test() -> void:
+	if _dots.is_empty():
+		return
+	var idx := randi() % _dots.size()
+	var dot := _dots[idx]
+	# Randomly decide whether to properly unsubscribe or just free (tests validity checks)
+	_remove_dot(dot, randf() > 0.5)
+	_spawn_dot()
+
+func _physics_process(_delta: float) -> void:
+	_stress_test()
+	for dot in _highlighted:
+		if is_instance_valid(dot):
+			dot.modulate = Color.WHITE
+	_highlighted.clear()
+
+	var mouse_pos := get_global_mouse_position()
+	var overlays := {}
+
+	var t := Time.get_ticks_usec()
+	var neighbours := _ns.get_all(mouse_pos, _query_radius)
+	_avg_get_all_ms += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avg_get_all_ms)
+	for n in neighbours:
+		var dot := n as CanvasItem
+		if dot:
+			dot.modulate = Color(1.0, 0.0, 0.0)
+			_highlighted.append(dot)
+	if _debug_cells:
+		for cell in _ns.get_last_queried_cells():
+			overlays[cell] = Color(1.0, 0.0, 0.0, 0.2)
+
+	if is_instance_valid(_closest_dot):
+		(_closest_dot as CanvasItem).modulate = Color.WHITE
+	t = Time.get_ticks_usec()
+	_closest_dot = _ns.get_next(mouse_pos) as Node2D
+	_avg_get_next_ms += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avg_get_next_ms)
+	if _closest_dot:
+		(_closest_dot as CanvasItem).modulate = Color(0.0, 1.0, 0.0)
+	if _debug_cells:
+		for cell in _ns.get_last_queried_cells():
+			var c := Color(0.0, 1.0, 0.0, 0.2)
+			overlays[cell] = overlays[cell].blend(c) if overlays.has(cell) else c
+		_grid.set_cell_overlays(overlays)
+
+	if _info_label:
+		var text := "get_all:  %.3f ms (avg)\nget_next: %.3f ms (avg)\nradius: %.0f px" % [
+			_avg_get_all_ms, _avg_get_next_ms, _query_radius
+		]
+		for key in _debug_info:
+			text += "\n%s: %s" % [key, str(_debug_info[key])]
+		_info_label.text = text
