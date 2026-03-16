@@ -1,10 +1,6 @@
 #pragma once
 
-#if defined(_DEBUG) || defined(DEBUG_ENABLED)
-#define DEBUG_GRID_INFORMATION 1
-#else
-#define DEBUG_GRID_INFORMATION 0
-#endif
+#define DEBUG_INFORMATION 1
 
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/node2d.hpp>
@@ -45,7 +41,7 @@ class NeighbourhoodServer : public Node {
 	static uint64_t to_cell_key(int cell_x, int cell_y);
 	void refresh();
 
-#if DEBUG_GRID_INFORMATION
+#if DEBUG_INFORMATION
 	std::vector<Vector2i> m_last_queried_cells;
 #endif
 
@@ -73,7 +69,7 @@ public:
 	void set_use_global_position(bool p_use_global_position);
 	bool get_use_global_position() const;
 
-#if DEBUG_GRID_INFORMATION
+#if DEBUG_INFORMATION
 	Array get_last_queried_cells() const;
 #endif
 };

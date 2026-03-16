@@ -27,8 +27,11 @@ void NeighbourhoodServer::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_global_position"), "set_use_global_position", "get_use_global_position");
 
-#if DEBUG_GRID_INFORMATION
+#if DEBUG_INFORMATION
 	ClassDB::bind_method(D_METHOD("get_last_queried_cells"), &NeighbourhoodServer::get_last_queried_cells);
+	ADD_SIGNAL(MethodInfo("debug_info",
+			PropertyInfo(Variant::STRING, "name"),
+			PropertyInfo(Variant::NIL, "value", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NIL_IS_VARIANT)));
 #endif
 }
 
@@ -56,17 +59,23 @@ uint64_t NeighbourhoodServer::to_cell_key(int cell_x, int cell_y) {
 }
 
 void NeighbourhoodServer::refresh() {
+#if DEBUG_INFORMATION
 	auto t_start = std::chrono::steady_clock::now();
+#endif
 
 	// Note: tried reusing a persistent m_grid_build map (clear()+swap) to avoid allocations
 	// no measurable performance gain in practice, reverted to simpler method.
 	std::unordered_map<uint64_t, std::vector<Subscriber>> grid;
 
+#if DEBUG_INFORMATION
 	auto t_pos = std::chrono::steady_clock::now();
+#endif
 	for (auto &[node, subscriber] : m_subscribers) {
 		subscriber.position = (node->*m_get_position)();
 	}
+#if DEBUG_INFORMATION
 	double ms_pos = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_pos).count();
+#endif
 
 	for (auto &[node, subscriber] : m_subscribers) {
 		int cx = static_cast<int>(std::floor(subscriber.position.x / grid_size));
@@ -79,9 +88,11 @@ void NeighbourhoodServer::refresh() {
 		m_grid = std::move(grid);
 	}
 
+#if DEBUG_INFORMATION
 	double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count();
-	print_line(vformat("[NeighbourhoodServer] Refresh: %.3f ms total (%.3f ms get_global_position, %d subscribers)",
-			ms, ms_pos, m_subscribers.size()));
+	emit_signal("debug_info", "refresh_total_ms", ms);
+	emit_signal("debug_info", "refresh_pos_ms", ms_pos);
+#endif
 }
 
 void NeighbourhoodServer::subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data) {
@@ -105,7 +116,7 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 	float best_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
 	const Subscriber *best = nullptr;
 
-#if DEBUG_GRID_INFORMATION
+#if DEBUG_INFORMATION
 	m_last_queried_cells.clear();
 #endif
 
@@ -127,7 +138,7 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 		}
 
 		auto check = [&](int cx, int cy) {
-#if DEBUG_GRID_INFORMATION
+#if DEBUG_INFORMATION
 			m_last_queried_cells.push_back(Vector2i(cx, cy));
 #endif
 			auto it = m_grid.find(to_cell_key(cx, cy));
@@ -178,13 +189,13 @@ Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distan
 	int min_cy = static_cast<int>(std::floor((p_position.y - p_max_distance) / grid_size));
 	int max_cy = static_cast<int>(std::floor((p_position.y + p_max_distance) / grid_size));
 
-#if DEBUG_GRID_INFORMATION
+#if DEBUG_INFORMATION
 	m_last_queried_cells.clear();
 #endif
 
 	for (int cy = min_cy; cy <= max_cy; cy++) {
 		for (int cx = min_cx; cx <= max_cx; cx++) {
-#if DEBUG_GRID_INFORMATION
+#if DEBUG_INFORMATION
 			m_last_queried_cells.push_back(Vector2i(cx, cy));
 #endif
 			auto it = m_grid.find(to_cell_key(cx, cy));
@@ -206,7 +217,7 @@ Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distan
 	return result;
 }
 
-#if DEBUG_GRID_INFORMATION
+#if DEBUG_INFORMATION
 Array NeighbourhoodServer::get_last_queried_cells() const {
 	Array result;
 	result.resize(m_last_queried_cells.size());

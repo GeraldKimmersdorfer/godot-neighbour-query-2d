@@ -13,6 +13,7 @@ var _highlighted: Array[CanvasItem] = []
 var _closest_dot: Node2D = null
 var _debug_cells: bool = false
 var _query_radius: float = 100.0
+var _debug_info: Dictionary = {}
 
 const _AVG_ALPHA := 0.05  # exponential moving average smoothing factor
 var _avg_get_all_ms: float = 0.0
@@ -22,6 +23,8 @@ var _avg_get_next_ms: float = 0.0
 
 func _ready() -> void:
 	_debug_cells = _ns.has_method("get_last_queried_cells")
+	if _ns.has_signal("debug_info"):
+		_ns.debug_info.connect(_on_ns_debug_info)
 	_grid.grid_size = _ns.grid_size
 	get_viewport().size_changed.connect(_on_viewport_size_changed)
 	var bounds := _get_bounds()
@@ -49,6 +52,9 @@ func _on_viewport_size_changed() -> void:
 	for dot in _dots:
 		dot.bounds = bounds
 
+func _on_ns_debug_info(name: String, value: Variant) -> void:
+	_debug_info[name] = value
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -56,7 +62,7 @@ func _input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_query_radius = maxf(_query_radius - 10.0, 10.0)
 
-func _process(_delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	for dot in _highlighted:
 		dot.modulate = Color.WHITE
 	_highlighted.clear()
@@ -90,6 +96,9 @@ func _process(_delta: float) -> void:
 		_grid.set_cell_overlays(overlays)
 
 	if _info_label:
-		_info_label.text = "get_all:  %.3f ms (avg)\nget_next: %.3f ms (avg)\nradius: %.0f px" % [
+		var text := "get_all:  %.3f ms (avg)\nget_next: %.3f ms (avg)\nradius: %.0f px" % [
 			_avg_get_all_ms, _avg_get_next_ms, _query_radius
 		]
+		for key in _debug_info:
+			text += "\n%s: %s" % [key, str(_debug_info[key])]
+		_info_label.text = text
