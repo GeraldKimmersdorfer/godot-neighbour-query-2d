@@ -1,10 +1,17 @@
 #pragma once
 
+#if defined(_DEBUG) || defined(DEBUG_ENABLED)
+#define DEBUG_GRID_INFORMATION 1
+#else
+#define DEBUG_GRID_INFORMATION 0
+#endif
+
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/node2d.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/vector2.hpp>
+#include <godot_cpp/variant/vector2i.hpp>
 
 #include <mutex>
 #include <unordered_map>
@@ -33,6 +40,10 @@ class NeighbourhoodServer : public Node {
 	static uint64_t to_cell_key(int cell_x, int cell_y);
 	void refresh();
 
+#if DEBUG_GRID_INFORMATION
+	std::vector<Vector2i> m_last_queried_cells;
+#endif
+
 protected:
 	static void _bind_methods();
 
@@ -53,4 +64,8 @@ public:
 
 	void set_refresh_intervall(float p_refresh_intervall);
 	float get_refresh_intervall() const;
+
+#if DEBUG_GRID_INFORMATION
+	Array get_last_queried_cells() const;
+#endif
 };

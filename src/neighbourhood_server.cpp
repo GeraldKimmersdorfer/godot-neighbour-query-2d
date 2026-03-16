@@ -22,6 +22,10 @@ void NeighbourhoodServer::_bind_methods() {
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "grid_size"), "set_grid_size", "get_grid_size");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
+
+#if DEBUG_GRID_INFORMATION
+	ClassDB::bind_method(D_METHOD("get_last_queried_cells"), &NeighbourhoodServer::get_last_queried_cells);
+#endif
 }
 
 void NeighbourhoodServer::_ready() {
@@ -85,9 +89,15 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 	float best_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
 	const Subscriber *best = nullptr;
 
+#if DEBUG_GRID_INFORMATION
+	m_last_queried_cells.clear();
+#endif
+
 	for (int r = 0; ; r++) {
 		// Lower bound on world-space distance to any cell in ring r is (r-1)*grid_size.
 		// If that already exceeds best found, no closer result can exist.
+		// In other words: If point is in r we need to check r+1 too since it depends on where
+		// the dot sits inside the cells r whether there can be a better result in r+1
 		if (r > 0) {
 			float min_ring_dist = static_cast<float>((r - 1) * grid_size);
 			if (min_ring_dist * min_ring_dist >= best_dist_sq) {
@@ -101,6 +111,9 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 		}
 
 		auto check = [&](int cx, int cy) {
+#if DEBUG_GRID_INFORMATION
+			m_last_queried_cells.push_back(Vector2i(cx, cy));
+#endif
 			auto it = m_grid.find(to_cell_key(cx, cy));
 			if (it == m_grid.end()) {
 				return;
@@ -144,8 +157,15 @@ Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distan
 	int min_cy = static_cast<int>(std::floor((p_position.y - p_max_distance) / grid_size));
 	int max_cy = static_cast<int>(std::floor((p_position.y + p_max_distance) / grid_size));
 
+#if DEBUG_GRID_INFORMATION
+	m_last_queried_cells.clear();
+#endif
+
 	for (int cy = min_cy; cy <= max_cy; cy++) {
 		for (int cx = min_cx; cx <= max_cx; cx++) {
+#if DEBUG_GRID_INFORMATION
+			m_last_queried_cells.push_back(Vector2i(cx, cy));
+#endif
 			auto it = m_grid.find(to_cell_key(cx, cy));
 			if (it == m_grid.end()) {
 				continue;
@@ -164,6 +184,17 @@ Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distan
 
 	return result;
 }
+
+#if DEBUG_GRID_INFORMATION
+Array NeighbourhoodServer::get_last_queried_cells() const {
+	Array result;
+	result.resize(m_last_queried_cells.size());
+	for (int i = 0; i < (int)m_last_queried_cells.size(); i++) {
+		result[i] = m_last_queried_cells[i];
+	}
+	return result;
+}
+#endif
 
 void NeighbourhoodServer::set_grid_size(int p_grid_size) {
 	grid_size = p_grid_size;

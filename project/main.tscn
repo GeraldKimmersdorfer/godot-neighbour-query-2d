@@ -2,9 +2,11 @@
 
 [ext_resource type="Script" uid="uid://d0uyx2lxxs8vp" path="res://main.gd" id="1_ig7tw"]
 [ext_resource type="PackedScene" uid="uid://byiom0kxdemif" path="res://dot.tscn" id="2_0xm2m"]
+[ext_resource type="Script" uid="uid://c6xejb65tofh" path="res://grid.gd" id="3_h2yge"]
 
-[node name="Main" type="Node2D" unique_id=608581577]
+[node name="Main" type="Node2D" unique_id=608581577 node_paths=PackedStringArray("_grid")]
 script = ExtResource("1_ig7tw")
+_grid = NodePath("Grid")
 dot_template = ExtResource("2_0xm2m")
 dot_count = 10000
 
@@ -12,3 +14,7 @@ dot_count = 10000
 process_thread_group = 2
 process_thread_group_order = 0
 process_thread_messages = 0
+
+[node name="Grid" type="Node2D" parent="." unique_id=1157301185]
+script = ExtResource("3_h2yge")
+grid_size = 236
