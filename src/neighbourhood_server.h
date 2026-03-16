@@ -16,7 +16,8 @@
 using namespace godot;
 
 struct Subscriber {
-	Node2D *node = nullptr;
+	// We need to store the node_id for validity check (is_instance_valid does not exists in gdextension)
+	uint64_t node_instance_id = 0;
 	uint32_t layer = 0;
 	Variant data;
 	Vector2 position;
@@ -28,12 +29,18 @@ class NeighbourhoodServer : public Node {
 	int grid_size = 128;
 	float refresh_intervall = 0.1f;
 	double m_time_since_refresh = 0.0;
+	// NOTE: get_global_position() accounts for a big portion of refresh time, so we
+	// allow the user to sue get_position() instead
 	bool use_global_position = true;
 
-	// Note: get_global_position() accounts for ~80% of refresh time; function pointer avoids
-	// a per-subscriber branch so the choice is made once in the setter, not inside the hot loop.
+	// NOTE: We use a function pointer depending on use_global_position such that we
+	// dont have to check use_global_position for each subscriber in each refresh iteration
 	Vector2 (Node2D::*m_get_position)() const = &Node2D::get_global_position;
 
+	// NOTE: We still keep they Node2D* reference as key for m_subscribers since we otherwise
+	// have to cast node_instance_id to Node2D* and that seems expensive.
+	// WARNING: It may point to freed memory so before use a validity check using the
+	// node_instance_id is necessary!
 	std::unordered_map<Node2D *, Subscriber> m_subscribers;
 	std::unordered_map<uint64_t, std::vector<Subscriber>> m_grid;
 	std::mutex m_grid_mutex;

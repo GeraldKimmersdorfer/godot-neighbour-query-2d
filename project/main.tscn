@@ -31,9 +31,6 @@ text = "asdasdasd"
 grid_size = 64
 refresh_intervall = 1.0
 use_global_position = false
-process_thread_group = 2
-process_thread_group_order = 0
-process_thread_messages = 0
 
 [node name="Grid" type="Node2D" parent="." unique_id=1157301185]
 script = ExtResource("3_h2yge")

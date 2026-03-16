@@ -62,9 +62,38 @@ func _input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_query_radius = maxf(_query_radius - 10.0, 10.0)
 
+func _spawn_dot() -> void:
+	var bounds := _get_bounds()
+	var dot: Node2D = dot_template.instantiate()
+	dot.position = Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
+	dot.bounds = bounds
+	add_child(dot)
+	_dots.append(dot)
+	_ns.subscribe(dot, 1, dot)
+
+func _remove_dot(dot: Node2D, call_unsubscribe: bool) -> void:
+	_dots.erase(dot)
+	if _closest_dot == dot:
+		_closest_dot = null
+	_highlighted.erase(dot)
+	if call_unsubscribe:
+		_ns.unsubscribe(dot)
+	dot.queue_free()
+
+func _stress_test() -> void:
+	if _dots.is_empty():
+		return
+	var idx := randi() % _dots.size()
+	var dot := _dots[idx]
+	# Randomly decide whether to properly unsubscribe or just free (tests validity checks)
+	_remove_dot(dot, randf() > 0.5)
+	_spawn_dot()
+
 func _physics_process(_delta: float) -> void:
+	_stress_test()
 	for dot in _highlighted:
-		dot.modulate = Color.WHITE
+		if is_instance_valid(dot):
+			dot.modulate = Color.WHITE
 	_highlighted.clear()
 
 	var mouse_pos := get_global_mouse_position()
@@ -82,7 +111,7 @@ func _physics_process(_delta: float) -> void:
 		for cell in _ns.get_last_queried_cells():
 			overlays[cell] = Color(1.0, 0.0, 0.0, 0.2)
 
-	if _closest_dot:
+	if is_instance_valid(_closest_dot):
 		(_closest_dot as CanvasItem).modulate = Color.WHITE
 	t = Time.get_ticks_usec()
 	_closest_dot = _ns.get_next(mouse_pos) as Node2D

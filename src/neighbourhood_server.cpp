@@ -3,6 +3,7 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/core/print_string.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
 
 #include <chrono>
 #include <cmath>
@@ -37,7 +38,10 @@ void NeighbourhoodServer::_bind_methods() {
 
 void NeighbourhoodServer::_ready() {
 	set_physics_process(true);
-	print_line(vformat("[NeighbourhoodServer] Main thread ID: %d", OS::get_singleton()->get_thread_caller_id()));
+#if DEBUG_INFORMATION
+	// NOTE: Emit deferred such that we see it otherwise _ready runs before main _ready
+	call_deferred("emit_signal", "debug_info", String("main_thread_id"), Variant(OS::get_singleton()->get_thread_caller_id()));
+#endif
 }
 
 void NeighbourhoodServer::_physics_process(double p_delta) {
@@ -60,27 +64,28 @@ uint64_t NeighbourhoodServer::to_cell_key(int cell_x, int cell_y) {
 
 void NeighbourhoodServer::refresh() {
 #if DEBUG_INFORMATION
+	emit_signal("debug_info", "refresh_thread_id", OS::get_singleton()->get_thread_caller_id());
 	auto t_start = std::chrono::steady_clock::now();
 #endif
 
 	// Note: tried reusing a persistent m_grid_build map (clear()+swap) to avoid allocations
 	// no measurable performance gain in practice, reverted to simpler method.
 	std::unordered_map<uint64_t, std::vector<Subscriber>> grid;
+	std::vector<Node2D *> invalid_nodes;
 
-#if DEBUG_INFORMATION
-	auto t_pos = std::chrono::steady_clock::now();
-#endif
 	for (auto &[node, subscriber] : m_subscribers) {
+		if (UtilityFunctions::instance_from_id(subscriber.node_instance_id) == nullptr) {
+			invalid_nodes.push_back(node);
+			continue;
+		}
 		subscriber.position = (node->*m_get_position)();
-	}
-#if DEBUG_INFORMATION
-	double ms_pos = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_pos).count();
-#endif
-
-	for (auto &[node, subscriber] : m_subscribers) {
 		int cx = static_cast<int>(std::floor(subscriber.position.x / grid_size));
 		int cy = static_cast<int>(std::floor(subscriber.position.y / grid_size));
 		grid[to_cell_key(cx, cy)].push_back(subscriber);
+	}
+
+	for (Node2D *node : invalid_nodes) {
+		m_subscribers.erase(node);
 	}
 
 	{
@@ -91,12 +96,11 @@ void NeighbourhoodServer::refresh() {
 #if DEBUG_INFORMATION
 	double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count();
 	emit_signal("debug_info", "refresh_total_ms", ms);
-	emit_signal("debug_info", "refresh_pos_ms", ms_pos);
 #endif
 }
 
 void NeighbourhoodServer::subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data) {
-	m_subscribers[p_node] = { p_node, p_layer, p_data };
+	m_subscribers[p_node] = { static_cast<uint64_t>(p_node->get_instance_id()), p_layer, p_data };
 }
 
 void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
@@ -146,6 +150,9 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 				return;
 			}
 			for (const Subscriber &s : it->second) {
+				if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+					continue;
+				}
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
@@ -203,6 +210,9 @@ Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distan
 				continue;
 			}
 			for (const Subscriber &s : it->second) {
+				if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+					continue;
+				}
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
