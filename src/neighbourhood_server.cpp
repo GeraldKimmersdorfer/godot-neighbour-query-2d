@@ -52,8 +52,10 @@ uint64_t NeighbourhoodServer::to_cell_key(int cell_x, int cell_y) {
 }
 
 void NeighbourhoodServer::refresh() {
-	//auto t_start = std::chrono::steady_clock::now();
+	auto t_start = std::chrono::steady_clock::now();
 
+	// Note: tried reusing a persistent m_grid_build map (clear()+swap) to avoid allocations
+	// no measurable performance gain in practice, reverted to simpler method.
 	std::unordered_map<uint64_t, std::vector<Subscriber>> grid;
 	for (auto &[node, subscriber] : m_subscribers) {
 		subscriber.position = node->get_global_position();
@@ -67,9 +69,9 @@ void NeighbourhoodServer::refresh() {
 		m_grid = std::move(grid);
 	}
 
-	//double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count();
-	//print_line(vformat("[NeighbourhoodServer] Refresh: built %d cells from %d subscribers in %.3f ms",
-	//		m_grid.size(), m_subscribers.size(), ms));
+	double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count();
+	print_line(vformat("[NeighbourhoodServer] Refresh: built %d cells from %d subscribers in %.3f ms",
+			m_grid.size(), m_subscribers.size(), ms));
 }
 
 void NeighbourhoodServer::subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data) {
@@ -82,6 +84,10 @@ void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
 
 Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
 	std::lock_guard<std::mutex> lock(m_grid_mutex);
+
+	if (m_grid.empty()) {
+		return Variant();
+	}
 
 	int cx0 = static_cast<int>(std::floor(p_position.x / grid_size));
 	int cy0 = static_cast<int>(std::floor(p_position.y / grid_size));
@@ -150,6 +156,11 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
 	std::lock_guard<std::mutex> lock(m_grid_mutex);
 	Array result;
+
+	if (m_grid.empty()) {
+		return result;
+	}
+
 	float max_dist_sq = p_max_distance * p_max_distance;
 
 	int min_cx = static_cast<int>(std::floor((p_position.x - p_max_distance) / grid_size));

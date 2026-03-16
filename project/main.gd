@@ -1,6 +1,10 @@
 extends Node2D
 
+@export_group("Scene Controls")
 @export var _grid: Grid
+@export var _info_label: Label
+
+@export_group("")
 @export var dot_template: PackedScene
 @export var dot_count: int = 1000
 
@@ -10,11 +14,15 @@ var _closest_dot: Node2D = null
 var _debug_cells: bool = false
 var _query_radius: float = 100.0
 
+const _AVG_ALPHA := 0.05  # exponential moving average smoothing factor
+var _avg_get_all_ms: float = 0.0
+var _avg_get_next_ms: float = 0.0
+
 @onready var _ns: NeighbourhoodServer = $NeighbourhoodServer
 
 func _ready() -> void:
 	_debug_cells = _ns.has_method("get_last_queried_cells")
-	_ns.refresh_intervall = 0
+	_ns.refresh_intervall = 0.5
 	_ns.grid_size = 64
 	_grid.grid_size = _ns.grid_size
 	get_viewport().size_changed.connect(_on_viewport_size_changed)
@@ -59,7 +67,9 @@ func _process(_delta: float) -> void:
 	var mouse_pos := get_global_mouse_position()
 	var overlays := {}
 
+	var t := Time.get_ticks_usec()
 	var neighbours := _ns.get_all(mouse_pos, _query_radius)
+	_avg_get_all_ms += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avg_get_all_ms)
 	for n in neighbours:
 		var dot := n as CanvasItem
 		if dot:
@@ -71,7 +81,9 @@ func _process(_delta: float) -> void:
 
 	if _closest_dot:
 		(_closest_dot as CanvasItem).modulate = Color.WHITE
+	t = Time.get_ticks_usec()
 	_closest_dot = _ns.get_next(mouse_pos) as Node2D
+	_avg_get_next_ms += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avg_get_next_ms)
 	if _closest_dot:
 		(_closest_dot as CanvasItem).modulate = Color(0.0, 1.0, 0.0)
 	if _debug_cells:
@@ -79,3 +91,8 @@ func _process(_delta: float) -> void:
 			var c := Color(0.0, 1.0, 0.0, 0.2)
 			overlays[cell] = overlays[cell].blend(c) if overlays.has(cell) else c
 		_grid.set_cell_overlays(overlays)
+
+	if _info_label:
+		_info_label.text = "get_all:  %.3f ms (avg)\nget_next: %.3f ms (avg)\nradius: %.0f px" % [
+			_avg_get_all_ms, _avg_get_next_ms, _query_radius
+		]
