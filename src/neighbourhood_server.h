@@ -5,6 +5,7 @@
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/node2d.hpp>
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/rect2.hpp>
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector2i.hpp>
@@ -23,12 +24,13 @@ struct Subscriber {
 	Vector2 position;
 };
 
-class NeighbourhoodServer : public Node {
-	GDCLASS(NeighbourhoodServer, Node)
+class NeighbourhoodServer : public Node2D {
+	GDCLASS(NeighbourhoodServer, Node2D)
 
 	int grid_size = 128;
 	float refresh_intervall = 0.1f;
 	double m_time_since_refresh = 0.0;
+	Rect2 domain = Rect2(0, 0, 1000, 600);
 	// NOTE: get_global_position() accounts for a big portion of refresh time, so we
 	// allow the user to use get_position() instead
 	bool use_global_position = true;
@@ -61,6 +63,7 @@ public:
 
 	void _ready() override;
 	void _physics_process(double p_delta) override;
+	void _draw() override;
 
 	void subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data);
 	void unsubscribe(Node2D *p_node);
@@ -75,6 +78,9 @@ public:
 
 	void set_use_global_position(bool p_use_global_position);
 	bool get_use_global_position() const;
+
+	void set_domain(const Rect2 &p_domain);
+	Rect2 get_domain() const;
 
 #if DEBUG_INFORMATION
 	Array get_last_queried_cells() const;

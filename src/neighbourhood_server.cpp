@@ -24,9 +24,13 @@ void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_use_global_position", "use_global_position"), &NeighbourhoodServer::set_use_global_position);
 	ClassDB::bind_method(D_METHOD("get_use_global_position"), &NeighbourhoodServer::get_use_global_position);
 
+	ClassDB::bind_method(D_METHOD("set_domain", "domain"), &NeighbourhoodServer::set_domain);
+	ClassDB::bind_method(D_METHOD("get_domain"), &NeighbourhoodServer::get_domain);
+
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "grid_size"), "set_grid_size", "get_grid_size");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_global_position"), "set_use_global_position", "get_use_global_position");
+	ADD_PROPERTY(PropertyInfo(Variant::RECT2, "domain"), "set_domain", "get_domain");
 
 #if DEBUG_INFORMATION
 	ClassDB::bind_method(D_METHOD("get_last_queried_cells"), &NeighbourhoodServer::get_last_queried_cells);
@@ -36,8 +40,35 @@ void NeighbourhoodServer::_bind_methods() {
 #endif
 }
 
+void NeighbourhoodServer::_draw() {
+	if (!Engine::get_singleton()->is_editor_hint()) {
+		return;
+	}
+	const Color border_color(0.2f, 0.8f, 0.2f, 0.8f);
+	const Color fill_color(0.2f, 0.8f, 0.2f, 0.2f);
+	const Color grid_color(0.2f, 0.8f, 0.2f, 0.4f);
+
+	draw_rect(domain, fill_color, true);
+	draw_rect(domain, border_color, false, 2.0f);
+
+	float x0 = domain.position.x;
+	float y0 = domain.position.y;
+	float x1 = x0 + domain.size.x;
+	float y1 = y0 + domain.size.y;
+
+	for (float x = x0 + grid_size; x < x1; x += grid_size) {
+		draw_line(Vector2(x, y0), Vector2(x, y1), grid_color, 1.0f);
+	}
+	for (float y = y0 + grid_size; y < y1; y += grid_size) {
+		draw_line(Vector2(x0, y), Vector2(x1, y), grid_color, 1.0f);
+	}
+}
+
 void NeighbourhoodServer::_ready() {
 	set_physics_process(true);
+	if (Engine::get_singleton()->is_editor_hint()) {
+		queue_redraw();
+	}
 #if DEBUG_INFORMATION
 	// NOTE: Emit deferred such that we see it otherwise _ready runs before main _ready
 	call_deferred("emit_signal", "debug_info", String("main_thread_id"), Variant(OS::get_singleton()->get_thread_caller_id()));
@@ -261,4 +292,15 @@ void NeighbourhoodServer::set_use_global_position(bool p_use_global_position) {
 
 bool NeighbourhoodServer::get_use_global_position() const {
 	return use_global_position;
+}
+
+void NeighbourhoodServer::set_domain(const Rect2 &p_domain) {
+	domain = p_domain;
+	if (Engine::get_singleton()->is_editor_hint()) {
+		queue_redraw();
+	}
+}
+
+Rect2 NeighbourhoodServer::get_domain() const {
+	return domain;
 }
