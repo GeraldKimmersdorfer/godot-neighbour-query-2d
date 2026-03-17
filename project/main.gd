@@ -1,7 +1,6 @@
 extends Node2D
 
 @export_group("Scene Controls")
-@export var _grid: Grid
 @export var _info_label: Label
 
 @export_group("")
@@ -15,7 +14,7 @@ var _debug_cells: bool = false
 var _query_radius: float = 100.0
 var _debug_info: Dictionary = {}
 
-const _AVG_ALPHA := 0.05 # running average smoothing factor
+const _AVG_ALPHA := 0.01 # running average smoothing factor
 var _avg_get_all_ms: float = 0.0
 var _avg_get_next_ms: float = 0.0
 var _avg_refresh_total_ms: float = 0.0
@@ -26,7 +25,6 @@ func _ready() -> void:
 	_debug_cells = _ns.has_method("get_last_queried_cells")
 	if _ns.has_signal("debug_info"):
 		_ns.debug_info.connect(_on_ns_debug_info)
-	_grid.grid_size = _ns.grid_size
 	get_viewport().size_changed.connect(_on_viewport_size_changed)
 	var bounds := _get_bounds()
 	for i in dot_count:
@@ -102,7 +100,6 @@ func _physics_process(_delta: float) -> void:
 	_highlighted.clear()
 
 	var mouse_pos := get_global_mouse_position()
-	var overlays := {}
 
 	var t := Time.get_ticks_usec()
 	var neighbours := _ns.get_all(mouse_pos, _query_radius)
@@ -112,9 +109,6 @@ func _physics_process(_delta: float) -> void:
 		if dot:
 			dot.modulate = Color(1.0, 0.0, 0.0)
 			_highlighted.append(dot)
-	if _debug_cells:
-		for cell in _ns.get_last_queried_cells():
-			overlays[cell] = Color(1.0, 0.0, 0.0, 0.2)
 
 	if is_instance_valid(_closest_dot):
 		(_closest_dot as CanvasItem).modulate = Color.WHITE
@@ -123,11 +117,6 @@ func _physics_process(_delta: float) -> void:
 	_avg_get_next_ms += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avg_get_next_ms)
 	if _closest_dot:
 		(_closest_dot as CanvasItem).modulate = Color(0.0, 1.0, 0.0)
-	if _debug_cells:
-		for cell in _ns.get_last_queried_cells():
-			var c := Color(0.0, 1.0, 0.0, 0.2)
-			overlays[cell] = overlays[cell].blend(c) if overlays.has(cell) else c
-		_grid.set_cell_overlays(overlays)
 
 	if _info_label:
 		var text := "get_all:  %.3f ms (avg)\nget_next: %.3f ms (avg)\nradius: %.0f px" % [
