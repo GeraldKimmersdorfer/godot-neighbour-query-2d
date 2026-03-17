@@ -48,7 +48,7 @@ void NeighbourhoodServer::_draw() {
 		return;
 	}
 	const Color border_color(1.0f, 1.0f, 1.0f, 0.8f);
-	const Color fill_color(1.0f, 1.0f, 1.0f, 0.2f);
+	const Color fill_color(1.0f, 1.0f, 1.0f, 0.1f);
 	const Color grid_color(1.0f, 1.0f, 1.0f, 0.4f);
 
 	draw_rect(domain, fill_color, true);
