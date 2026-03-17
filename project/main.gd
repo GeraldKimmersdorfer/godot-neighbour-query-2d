@@ -15,9 +15,10 @@ var _debug_cells: bool = false
 var _query_radius: float = 100.0
 var _debug_info: Dictionary = {}
 
-const _AVG_ALPHA := 0.05  # running average smoothing factor
+const _AVG_ALPHA := 0.05 # running average smoothing factor
 var _avg_get_all_ms: float = 0.0
 var _avg_get_next_ms: float = 0.0
+var _avg_refresh_total_ms: float = 0.0
 
 @onready var _ns: NeighbourhoodServer = $NeighbourhoodServer
 
@@ -44,16 +45,20 @@ func _get_bounds() -> Rect2:
 	var gs := float(_ns.grid_size)
 	var viewport_size := get_viewport_rect().size
 	# Snap to the last fully visible cell boundary, then pad by one cell on each side
-	var snapped := Vector2(floor(viewport_size.x / gs) * gs, floor(viewport_size.y / gs) * gs)
-	return Rect2(Vector2(gs, gs), snapped - Vector2(gs * 2.0, gs * 2.0))
+	var snapped_size := Vector2(floor(viewport_size.x / gs) * gs, floor(viewport_size.y / gs) * gs)
+	return Rect2(Vector2(gs, gs), snapped_size - Vector2(gs * 2.0, gs * 2.0))
 
 func _on_viewport_size_changed() -> void:
 	var bounds := _get_bounds()
 	for dot in _dots:
 		dot.bounds = bounds
 
-func _on_ns_debug_info(name: String, value: Variant) -> void:
-	_debug_info[name] = value
+func _on_ns_debug_info(key: String, value: Variant) -> void:
+	if key == "refresh_total_ms":
+		_avg_refresh_total_ms += _AVG_ALPHA * (float(value) - _avg_refresh_total_ms)
+		_debug_info[key] = _avg_refresh_total_ms
+	else:
+		_debug_info[key] = value
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:

@@ -1,6 +1,6 @@
 #pragma once
 
-#define DEBUG_INFORMATION 0
+#define DEBUG_INFORMATION 1
 
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/node2d.hpp>
@@ -30,7 +30,7 @@ class NeighbourhoodServer : public Node {
 	float refresh_intervall = 0.1f;
 	double m_time_since_refresh = 0.0;
 	// NOTE: get_global_position() accounts for a big portion of refresh time, so we
-	// allow the user to sue get_position() instead
+	// allow the user to use get_position() instead
 	bool use_global_position = true;
 
 	// NOTE: We use a function pointer depending on use_global_position such that we
