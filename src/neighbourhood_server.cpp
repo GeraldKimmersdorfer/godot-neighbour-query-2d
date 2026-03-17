@@ -24,20 +24,91 @@ void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_use_global_position", "use_global_position"), &NeighbourhoodServer::set_use_global_position);
 	ClassDB::bind_method(D_METHOD("get_use_global_position"), &NeighbourhoodServer::get_use_global_position);
 
+	ClassDB::bind_method(D_METHOD("set_domain", "domain"), &NeighbourhoodServer::set_domain);
+	ClassDB::bind_method(D_METHOD("get_domain"), &NeighbourhoodServer::get_domain);
+
+	ClassDB::bind_method(D_METHOD("set_draw_domain", "draw_domain"), &NeighbourhoodServer::set_draw_domain);
+	ClassDB::bind_method(D_METHOD("get_draw_domain"), &NeighbourhoodServer::get_draw_domain);
+
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "grid_size"), "set_grid_size", "get_grid_size");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_global_position"), "set_use_global_position", "get_use_global_position");
+	ADD_PROPERTY(PropertyInfo(Variant::RECT2, "domain"), "set_domain", "get_domain");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "draw_domain"), "set_draw_domain", "get_draw_domain");
 
 #if DEBUG_INFORMATION
-	ClassDB::bind_method(D_METHOD("get_last_queried_cells"), &NeighbourhoodServer::get_last_queried_cells);
 	ADD_SIGNAL(MethodInfo("debug_info",
 			PropertyInfo(Variant::STRING, "name"),
 			PropertyInfo(Variant::NIL, "value", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NIL_IS_VARIANT)));
 #endif
 }
 
-void NeighbourhoodServer::_ready() {
+void NeighbourhoodServer::_draw() {
+	if (!draw_domain) {
+		return;
+	}
+	const Color border_color(1.0f, 1.0f, 1.0f, 0.8f);
+	const Color fill_color(1.0f, 1.0f, 1.0f, 0.1f);
+	const Color grid_color(1.0f, 1.0f, 1.0f, 0.4f);
+
+	draw_rect(domain, fill_color, true);
+
+#if DEBUG_INFORMATION
+	{
+		int max_count = 0;
+		for (int c : m_grid_querycount) {
+			max_count = std::max(max_count, c);
+		}
+		if (max_count > 0) {
+			for (int cy = 0; cy < m_grid_rows; cy++) {
+				for (int cx = 0; cx < m_grid_cols; cx++) {
+					int count = m_grid_querycount[to_cell_index(cx, cy)];
+					if (count == 0) {
+						continue;
+					}
+					float alpha = static_cast<float>(count) / max_count;
+					draw_rect(Rect2(domain.position.x + cx * grid_size, domain.position.y + cy * grid_size, grid_size, grid_size),
+							Color(1.0f, 0.0f, 0.0f, alpha * 0.6f), true);
+				}
+			}
+			std::fill(m_grid_querycount.begin(), m_grid_querycount.end(), 0);
+		}
+		call_deferred("emit_signal", "debug_info", String("max_querycount"), Variant(max_count));
+	}
+
+#endif
+
+	draw_rect(domain, border_color, false, 2.0f);
+
+	float x0 = domain.position.x;
+	float y0 = domain.position.y;
+	float x1 = x0 + domain.size.x;
+	float y1 = y0 + domain.size.y;
+
+	// Extend to the next full cell boundary so the overflow beyond the domain is visible
+	float x_end = x0 + std::ceil(domain.size.x / grid_size) * grid_size;
+	float y_end = y0 + std::ceil(domain.size.y / grid_size) * grid_size;
+
+	for (float x = x0; x <= x_end; x += grid_size) {
+		draw_line(Vector2(x, y0), Vector2(x, y_end), grid_color, 1.0f);
+	}
+	for (float y = y0; y <= y_end; y += grid_size) {
+		draw_line(Vector2(x0, y), Vector2(x_end, y), grid_color, 1.0f);
+	}
+}
+
+void NeighbourhoodServer::_init() {
+	_update_grid_dimensions();
 	set_physics_process(true);
+#if DEBUG_INFORMATION
+	set_process(true);
+#endif
+}
+
+void NeighbourhoodServer::_ready() {
+	if (Engine::get_singleton()->is_editor_hint()) {
+		queue_redraw();
+	}
 #if DEBUG_INFORMATION
 	// NOTE: Emit deferred such that we see it otherwise _ready runs before main _ready
 	call_deferred("emit_signal", "debug_info", String("main_thread_id"), Variant(OS::get_singleton()->get_thread_caller_id()));
@@ -53,13 +124,28 @@ void NeighbourhoodServer::_physics_process(double p_delta) {
 		return;
 	}
 	m_time_since_refresh = 0.0;
-	//print_line(vformat("[NeighbourhoodServer] _physics_process thread ID: %d", OS::get_singleton()->get_thread_caller_id()));
 	refresh();
 }
 
-uint64_t NeighbourhoodServer::to_cell_key(int cell_x, int cell_y) {
-	return (static_cast<uint64_t>(static_cast<uint32_t>(cell_x)) << 32) |
-		   static_cast<uint64_t>(static_cast<uint32_t>(cell_y));
+int NeighbourhoodServer::to_cell_index(int cx, int cy) const {
+	return cy * m_grid_cols + cx;
+}
+
+void NeighbourhoodServer::_update_grid_dimensions() {
+	m_grid_cols = std::max(1, static_cast<int>(std::ceil(domain.size.x / grid_size)));
+	m_grid_rows = std::max(1, static_cast<int>(std::ceil(domain.size.y / grid_size)));
+	m_domain_center = domain.position + domain.size * 0.5f;
+	m_domain_diagonal_half = domain.size.length() * 0.5f;
+	int cell_count = m_grid_cols * m_grid_rows;
+	m_brute_force_threshold = cell_count;
+	m_grid_build.assign(cell_count, {});
+#if DEBUG_INFORMATION
+	m_grid_querycount.assign(cell_count, 0);
+#endif
+	{
+		std::lock_guard<std::mutex> lock(m_grid_mutex);
+		m_grid.assign(cell_count, {});
+	}
 }
 
 void NeighbourhoodServer::refresh() {
@@ -68,9 +154,11 @@ void NeighbourhoodServer::refresh() {
 	auto t_start = std::chrono::steady_clock::now();
 #endif
 
-	// Note: tried reusing a persistent m_grid_build map (clear()+swap) to avoid allocations
-	// no measurable performance gain in practice, reverted to simpler method.
-	std::unordered_map<uint64_t, std::vector<Subscriber>> grid;
+	// Clear build buffer in-place (keeps per-cell capacity to avoid repeated reallocations).
+	for (auto &cell : m_grid_build) {
+		cell.clear();
+	}
+
 	std::vector<Node2D *> invalid_nodes;
 
 	for (auto &[node, subscriber] : m_subscribers) {
@@ -79,9 +167,13 @@ void NeighbourhoodServer::refresh() {
 			continue;
 		}
 		subscriber.position = (node->*m_get_position)();
-		int cx = static_cast<int>(std::floor(subscriber.position.x / grid_size));
-		int cy = static_cast<int>(std::floor(subscriber.position.y / grid_size));
-		grid[to_cell_key(cx, cy)].push_back(subscriber);
+		int cx = static_cast<int>(std::floor((subscriber.position.x - domain.position.x) / grid_size));
+		int cy = static_cast<int>(std::floor((subscriber.position.y - domain.position.y) / grid_size));
+		// Points outside the domain are ignored and not added to the AS.
+		if (!is_cell_in_bounds(cx, cy)) {
+			continue;
+		}
+		m_grid_build[to_cell_index(cx, cy)].push_back(subscriber);
 	}
 
 	for (Node2D *node : invalid_nodes) {
@@ -90,7 +182,7 @@ void NeighbourhoodServer::refresh() {
 
 	{
 		std::lock_guard<std::mutex> lock(m_grid_mutex);
-		m_grid = std::move(grid);
+		std::swap(m_grid, m_grid_build);
 	}
 
 #if DEBUG_INFORMATION
@@ -108,23 +200,43 @@ void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
 }
 
 Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
-	std::lock_guard<std::mutex> lock(m_grid_mutex);
-
-	if (m_grid.empty()) {
-		return Variant();
+	if ((int)m_subscribers.size() < m_brute_force_threshold) {
+		float max_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
+		float best_dist_sq = max_dist_sq;
+		const Subscriber *best = nullptr;
+		for (const auto &[node, s] : m_subscribers) {
+			if ((s.layer & p_layer_mask) == 0) {
+				continue;
+			}
+			float d = s.position.distance_squared_to(p_position);
+			if (d >= best_dist_sq) {
+				continue;
+			}
+			if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+				continue;
+			}
+			best_dist_sq = d;
+			best = &s;
+		}
+		return best ? best->data : Variant();
 	}
 
-	int cx0 = static_cast<int>(std::floor(p_position.x / grid_size));
-	int cy0 = static_cast<int>(std::floor(p_position.y / grid_size));
+	std::lock_guard<std::mutex> lock(m_grid_mutex);
+
+	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
+	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+
+	// NOTE: Cap max_distance to guarantee loop termination.
+	// dist-to-center + diagonal is a safe upper bound for the farthest reachable point in the domain.
+	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
+	if (p_max_distance <= 0.0f || p_max_distance > upper_bound) {
+		p_max_distance = upper_bound;
+	}
 
 	float best_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
 	const Subscriber *best = nullptr;
 
-#if DEBUG_INFORMATION
-	m_last_queried_cells.clear();
-#endif
-
-	for (int r = 0; ; r++) {
+	for (int r = 0;; r++) {
 		// Lower bound on world-space distance to any cell in ring r is (r-1)*grid_size.
 		// If that already exceeds best found, no closer result can exist.
 		// In other words: If point is in r we need to check r+1 too since it depends on where
@@ -142,25 +254,26 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 		}
 
 		auto check = [&](int cx, int cy) {
-#if DEBUG_INFORMATION
-			m_last_queried_cells.push_back(Vector2i(cx, cy));
-#endif
-			auto it = m_grid.find(to_cell_key(cx, cy));
-			if (it == m_grid.end()) {
+			if (!is_cell_in_bounds(cx, cy)) {
 				return;
 			}
-			for (const Subscriber &s : it->second) {
-				if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-					continue;
-				}
+			const int cell_idx = to_cell_index(cx, cy);
+#if DEBUG_INFORMATION
+			m_grid_querycount[cell_idx]++;
+#endif
+			for (const Subscriber &s : m_grid[cell_idx]) {
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
 				float d = s.position.distance_squared_to(p_position);
-				if (d < best_dist_sq) {
-					best_dist_sq = d;
-					best = &s;
+				if (d >= best_dist_sq) {
+					continue;
 				}
+				if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+					continue;
+				}
+				best_dist_sq = d;
+				best = &s;
 			}
 		};
 
@@ -182,41 +295,51 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 }
 
 Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
-	std::lock_guard<std::mutex> lock(m_grid_mutex);
 	Array result;
 
-	if (m_grid.empty()) {
+	if ((int)m_subscribers.size() < m_brute_force_threshold) {
+		float max_dist_sq = p_max_distance * p_max_distance;
+		for (const auto &[node, s] : m_subscribers) {
+			if ((s.layer & p_layer_mask) == 0) {
+				continue;
+			}
+			if (s.position.distance_squared_to(p_position) > max_dist_sq) {
+				continue;
+			}
+			if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+				continue;
+			}
+			result.push_back(s.data);
+		}
 		return result;
 	}
 
+	std::lock_guard<std::mutex> lock(m_grid_mutex);
+
+	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
+	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+
 	float max_dist_sq = p_max_distance * p_max_distance;
 
-	int min_cx = static_cast<int>(std::floor((p_position.x - p_max_distance) / grid_size));
-	int max_cx = static_cast<int>(std::floor((p_position.x + p_max_distance) / grid_size));
-	int min_cy = static_cast<int>(std::floor((p_position.y - p_max_distance) / grid_size));
-	int max_cy = static_cast<int>(std::floor((p_position.y + p_max_distance) / grid_size));
-
-#if DEBUG_INFORMATION
-	m_last_queried_cells.clear();
-#endif
+	int min_cx = std::max(0, static_cast<int>(std::floor((p_position.x - p_max_distance - domain.position.x) / grid_size)));
+	int max_cx = std::min(m_grid_cols - 1, static_cast<int>(std::floor((p_position.x + p_max_distance - domain.position.x) / grid_size)));
+	int min_cy = std::max(0, static_cast<int>(std::floor((p_position.y - p_max_distance - domain.position.y) / grid_size)));
+	int max_cy = std::min(m_grid_rows - 1, static_cast<int>(std::floor((p_position.y + p_max_distance - domain.position.y) / grid_size)));
 
 	for (int cy = min_cy; cy <= max_cy; cy++) {
 		for (int cx = min_cx; cx <= max_cx; cx++) {
+			const int cell_idx = to_cell_index(cx, cy);
 #if DEBUG_INFORMATION
-			m_last_queried_cells.push_back(Vector2i(cx, cy));
+			m_grid_querycount[cell_idx]++;
 #endif
-			auto it = m_grid.find(to_cell_key(cx, cy));
-			if (it == m_grid.end()) {
-				continue;
-			}
-			for (const Subscriber &s : it->second) {
-				if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-					continue;
-				}
+			for (const Subscriber &s : m_grid[cell_idx]) {
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
 				if (s.position.distance_squared_to(p_position) > max_dist_sq) {
+					continue;
+				}
+				if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
 					continue;
 				}
 				result.push_back(s.data);
@@ -228,18 +351,24 @@ Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distan
 }
 
 #if DEBUG_INFORMATION
-Array NeighbourhoodServer::get_last_queried_cells() const {
-	Array result;
-	result.resize(m_last_queried_cells.size());
-	for (int i = 0; i < (int)m_last_queried_cells.size(); i++) {
-		result[i] = m_last_queried_cells[i];
+void NeighbourhoodServer::_process(double p_delta) {
+	if (!draw_domain) {
+		return;
 	}
-	return result;
+	m_time_since_querycount_redraw += p_delta;
+	if (m_time_since_querycount_redraw >= 0.1) {
+		m_time_since_querycount_redraw = 0.0;
+		queue_redraw();
+	}
 }
 #endif
 
 void NeighbourhoodServer::set_grid_size(int p_grid_size) {
 	grid_size = p_grid_size;
+	_update_grid_dimensions();
+	if (Engine::get_singleton()->is_editor_hint()) {
+		queue_redraw();
+	}
 }
 
 int NeighbourhoodServer::get_grid_size() const {
@@ -261,4 +390,25 @@ void NeighbourhoodServer::set_use_global_position(bool p_use_global_position) {
 
 bool NeighbourhoodServer::get_use_global_position() const {
 	return use_global_position;
+}
+
+void NeighbourhoodServer::set_domain(const Rect2 &p_domain) {
+	domain = p_domain;
+	_update_grid_dimensions();
+	if (Engine::get_singleton()->is_editor_hint()) {
+		queue_redraw();
+	}
+}
+
+Rect2 NeighbourhoodServer::get_domain() const {
+	return domain;
+}
+
+void NeighbourhoodServer::set_draw_domain(bool p_draw_domain) {
+	draw_domain = p_draw_domain;
+	queue_redraw();
+}
+
+bool NeighbourhoodServer::get_draw_domain() const {
+	return draw_domain;
 }

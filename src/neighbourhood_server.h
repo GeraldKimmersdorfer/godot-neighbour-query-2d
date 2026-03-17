@@ -1,10 +1,15 @@
 #pragma once
 
+#ifdef DEBUG_ENABLED
+#define DEBUG_INFORMATION 1
+#else
 #define DEBUG_INFORMATION 0
+#endif
 
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/node2d.hpp>
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/rect2.hpp>
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector2i.hpp>
@@ -23,14 +28,16 @@ struct Subscriber {
 	Vector2 position;
 };
 
-class NeighbourhoodServer : public Node {
-	GDCLASS(NeighbourhoodServer, Node)
+class NeighbourhoodServer : public Node2D {
+	GDCLASS(NeighbourhoodServer, Node2D)
 
 	int grid_size = 128;
 	float refresh_intervall = 0.1f;
 	double m_time_since_refresh = 0.0;
+	Rect2 domain = Rect2(0, 0, 1000, 600);
+	bool draw_domain = true;
 	// NOTE: get_global_position() accounts for a big portion of refresh time, so we
-	// allow the user to sue get_position() instead
+	// allow the user to use get_position() instead
 	bool use_global_position = true;
 
 	// NOTE: We use a function pointer depending on use_global_position such that we
@@ -42,14 +49,28 @@ class NeighbourhoodServer : public Node {
 	// WARNING: It may point to freed memory so before use a validity check using the
 	// node_instance_id is necessary!
 	std::unordered_map<Node2D *, Subscriber> m_subscribers;
-	std::unordered_map<uint64_t, std::vector<Subscriber>> m_grid;
+
+	// Flat cell array [cy * m_grid_cols + cx], dimensions derived from domain and grid_size.
+	// m_grid_build is written by refresh() without holding the lock, then swapped with m_grid.
+	int m_grid_cols = 0;
+	int m_grid_rows = 0;
+	int m_brute_force_threshold = 0;
+	Vector2 m_domain_center;
+	float m_domain_diagonal_half = 0.0f;
+	std::vector<std::vector<Subscriber>> m_grid;
+	std::vector<std::vector<Subscriber>> m_grid_build;
 	std::mutex m_grid_mutex;
 
-	static uint64_t to_cell_key(int cell_x, int cell_y);
+	inline bool is_cell_in_bounds(int cx, int cy) const {
+		return cx >= 0 && cx < m_grid_cols && cy >= 0 && cy < m_grid_rows;
+	}
+	int to_cell_index(int cx, int cy) const;
+	void _update_grid_dimensions();
 	void refresh();
 
 #if DEBUG_INFORMATION
-	std::vector<Vector2i> m_last_queried_cells;
+	std::vector<int> m_grid_querycount;
+	double m_time_since_querycount_redraw = 0.0;
 #endif
 
 protected:
@@ -59,8 +80,13 @@ public:
 	NeighbourhoodServer() = default;
 	~NeighbourhoodServer() override = default;
 
+	void _init();
 	void _ready() override;
 	void _physics_process(double p_delta) override;
+	void _draw() override;
+#if DEBUG_INFORMATION
+	void _process(double p_delta) override;
+#endif
 
 	void subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data);
 	void unsubscribe(Node2D *p_node);
@@ -76,7 +102,9 @@ public:
 	void set_use_global_position(bool p_use_global_position);
 	bool get_use_global_position() const;
 
-#if DEBUG_INFORMATION
-	Array get_last_queried_cells() const;
-#endif
+	void set_domain(const Rect2 &p_domain);
+	Rect2 get_domain() const;
+
+	void set_draw_domain(bool p_draw_domain);
+	bool get_draw_domain() const;
 };
