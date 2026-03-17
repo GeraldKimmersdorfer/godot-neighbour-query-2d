@@ -56,11 +56,15 @@ void NeighbourhoodServer::_draw() {
 	float x1 = x0 + domain.size.x;
 	float y1 = y0 + domain.size.y;
 
-	for (float x = x0 + grid_size; x < x1; x += grid_size) {
-		draw_line(Vector2(x, y0), Vector2(x, y1), grid_color, 1.0f);
+	// Extend to the next full cell boundary so the overflow beyond the domain is visible
+	float x_end = x0 + std::ceil(domain.size.x / grid_size) * grid_size;
+	float y_end = y0 + std::ceil(domain.size.y / grid_size) * grid_size;
+
+	for (float x = x0; x <= x_end; x += grid_size) {
+		draw_line(Vector2(x, y0), Vector2(x, y_end), grid_color, 1.0f);
 	}
-	for (float y = y0 + grid_size; y < y1; y += grid_size) {
-		draw_line(Vector2(x0, y), Vector2(x1, y), grid_color, 1.0f);
+	for (float y = y0; y <= y_end; y += grid_size) {
+		draw_line(Vector2(x0, y), Vector2(x_end, y), grid_color, 1.0f);
 	}
 }
 
@@ -90,7 +94,7 @@ void NeighbourhoodServer::_physics_process(double p_delta) {
 
 uint64_t NeighbourhoodServer::to_cell_key(int cell_x, int cell_y) {
 	return (static_cast<uint64_t>(static_cast<uint32_t>(cell_x)) << 32) |
-		   static_cast<uint64_t>(static_cast<uint32_t>(cell_y));
+			static_cast<uint64_t>(static_cast<uint32_t>(cell_y));
 }
 
 void NeighbourhoodServer::refresh() {
@@ -155,7 +159,7 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 	m_last_queried_cells.clear();
 #endif
 
-	for (int r = 0; ; r++) {
+	for (int r = 0;; r++) {
 		// Lower bound on world-space distance to any cell in ring r is (r-1)*grid_size.
 		// If that already exceeds best found, no closer result can exist.
 		// In other words: If point is in r we need to check r+1 too since it depends on where
@@ -271,6 +275,9 @@ Array NeighbourhoodServer::get_last_queried_cells() const {
 
 void NeighbourhoodServer::set_grid_size(int p_grid_size) {
 	grid_size = p_grid_size;
+	if (Engine::get_singleton()->is_editor_hint()) {
+		queue_redraw();
+	}
 }
 
 int NeighbourhoodServer::get_grid_size() const {
