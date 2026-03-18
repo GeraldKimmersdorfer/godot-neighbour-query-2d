@@ -4,7 +4,7 @@
 		Node that provides fast spatial neighbourhood queries over subscribed [Node2D] instances.
 	</brief_description>
 	<description>
-		[NeighbourhoodServer] maintains a uniform spatial grid that is rebuilt at a configurable interval during physics processing. [Node2D] instances register themselves via [method subscribe] and can be queried by world position using [method get_next] and [method get_all].
+		[NeighbourhoodServer] maintains a uniform spatial grid that is rebuilt at a configurable interval during physics processing. [Node2D] instances register themselves via [method subscribe] and can be queried by world position using [method get_next], [method get_all], and [method get_closest].
 		Subscribers outside the [member domain] rectangle are ignored and not placed in the grid. The domain can be visualised in the editor and at runtime via [member draw_domain].
 	</description>
 	<tutorials>
@@ -23,7 +23,7 @@
 			<return type="void" />
 			<param index="0" name="node" type="Node2D" />
 			<description>
-				Removes [param node] from the server so it is no longer returned by spatial queries. Safe to omit if the node is about to be freed — stale entries are cleaned up automatically on the next refresh.
+				Removes [param node] from the server so it is no longer returned by spatial queries. Safe to omit if the node is about to be freed. Stale entries are cleaned up automatically upon next refresh.
 			</description>
 		</method>
 		<method name="get_next">
@@ -31,9 +31,11 @@
 			<param index="0" name="position" type="Vector2" />
 			<param index="1" name="max_distance" type="float" default="0.0" />
 			<param index="2" name="layer_mask" type="int" default="4294967295" />
+			<param index="3" name="exclude" type="Node2D" default="null" />
 			<description>
 				Returns the data payload of the nearest subscriber to [param position] whose layer matches [param layer_mask]. Returns [code]null[/code] if no match is found.
 				[param max_distance] limits the search radius in world units. Use [code]0.0[/code] for unlimited range.
+				[param exclude] optionally skips a specific subscriber.
 			</description>
 		</method>
 		<method name="get_all">
@@ -41,17 +43,32 @@
 			<param index="0" name="position" type="Vector2" />
 			<param index="1" name="max_distance" type="float" default="0.0" />
 			<param index="2" name="layer_mask" type="int" default="4294967295" />
+			<param index="3" name="exclude" type="Node2D" default="null" />
 			<description>
 				Returns an [Array] of data payloads for all subscribers within [param max_distance] of [param position] whose layer matches [param layer_mask].
+				[param exclude] optionally skips a specific subscriber.
+			</description>
+		</method>
+		<method name="get_closest">
+			<return type="Array" />
+			<param index="0" name="position" type="Vector2" />
+			<param index="1" name="max_count" type="int" />
+			<param index="2" name="max_distance" type="float" default="0.0" />
+			<param index="3" name="layer_mask" type="int" default="4294967295" />
+			<param index="4" name="exclude" type="Node2D" default="null" />
+			<description>
+				Returns an [Array] of up to [param max_count] data payloads for the nearest subscribers to [param position] whose layer matches [param layer_mask]. The array is not sorted by distance.
+				[param max_distance] limits the search radius in world units. Use [code]0.0[/code] for unlimited range.
+				[param exclude] optionally skips a specific subscriber.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="grid_size" type="int" setter="set_grid_size" getter="get_grid_size" default="128">
-			Width and height of each spatial grid cell in world units. Smaller values improve query precision at the cost of more cells to manage; larger values reduce overhead but increase the number of subscribers checked per query. Should be somewhere around the average interaction radius of our queries.
+			Width and height of each spatial grid cell in world units. Should be somewhere around the average interaction radius of our queries.
 		</member>
 		<member name="refresh_intervall" type="float" setter="set_refresh_intervall" getter="get_refresh_intervall" default="0.1">
-			Minimum time in seconds between grid rebuilds. Set to [code]0.0[/code] to rebuild every physics frame. Higher values reduce CPU cost at the expense of query freshness.
+			Minimum time in seconds between grid rebuilds. Set to [code]0.0[/code] to rebuild every physics frame. Higher values reduce CPU cost, but the queried results may be inaccurate.
 		</member>
 		<member name="use_global_position" type="bool" setter="set_use_global_position" getter="get_use_global_position" default="true">
 			When [code]true[/code] (default), subscriber positions are read via [method Node2D.get_global_position]. Set to [code]false[/code] to use [method Node2D.get_position] (local space), which is significantly faster when all subscribers share the same parent and no global transform traversal is needed.
@@ -60,7 +77,13 @@
 			The world-space rectangle that defines the active area of the server. Subscribers located outside this rectangle are ignored during each grid refresh and will not appear in query results.
 		</member>
 		<member name="draw_domain" type="bool" setter="set_draw_domain" getter="get_draw_domain" default="true">
-			When [code]true[/code], the server draws the [member domain] boundary and grid overlay using [method CanvasItem.draw_rect] and [method CanvasItem.draw_line]. In debug builds, queried cells are also highlighted in red proportional to their query frequency.
+			When [code]true[/code], the server draws the [member domain] boundary and grid overlay using the Node2D._draw API.
+			[b]Warning:[/b] This feature is intended for debugging only.
+		</member>
+		<member name="draw_queries_refresh_interval" type="float" setter="set_draw_queries_refresh_interval" getter="get_draw_queries_refresh_interval" default="0.1">
+			Interval in seconds between redraws of the query-count heatmap. Only has an effect when [member draw_domain] is [code]true[/code]. Set to a negative value to disable query drawing entirely.
+			[b]Warning:[/b] This feature is intended for debugging only. Frequent redraws at low intervals are very expensive at scale and will noticeably impact performance.
+			[b]Warning:[/b] Only available in debug builds!
 		</member>
 	</members>
 	<signals>
@@ -68,8 +91,9 @@
 			<param index="0" name="name" type="String" />
 			<param index="1" name="value" type="Variant" />
 			<description>
-				Emitted at various points during processing to expose internal timing and diagnostic data. Only available in debug builds!
+				Emitted at various points during processing to expose internal timing and diagnostic data.
 				[param name] may be: [code]main_thread_id[/code], [code]refresh_thread_id[/code], [code]refresh_total_ms[/code], [code]max_querycount[/code].
+				[b]Warning:[/b] Only available in debug builds!
 			</description>
 		</signal>
 	</signals>

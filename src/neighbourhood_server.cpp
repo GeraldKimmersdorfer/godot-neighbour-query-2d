@@ -5,6 +5,7 @@
 #include <godot_cpp/core/print_string.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <limits>
@@ -12,8 +13,9 @@
 void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer", "data"), &NeighbourhoodServer::subscribe);
 	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourhoodServer::unsubscribe);
-	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance", "layer_mask"), &NeighbourhoodServer::get_next, DEFVAL(0.0f), DEFVAL(0xFFFFFFFF));
-	ClassDB::bind_method(D_METHOD("get_all", "position", "max_distance", "layer_mask"), &NeighbourhoodServer::get_all, DEFVAL(0.0f), DEFVAL(0xFFFFFFFF));
+	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_next, DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("get_all", "position", "max_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_all, DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("get_closest", "position", "max_count", "max_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_closest, DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 
 	ClassDB::bind_method(D_METHOD("set_grid_size", "grid_size"), &NeighbourhoodServer::set_grid_size);
 	ClassDB::bind_method(D_METHOD("get_grid_size"), &NeighbourhoodServer::get_grid_size);
@@ -30,11 +32,15 @@ void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_draw_domain", "draw_domain"), &NeighbourhoodServer::set_draw_domain);
 	ClassDB::bind_method(D_METHOD("get_draw_domain"), &NeighbourhoodServer::get_draw_domain);
 
+	ClassDB::bind_method(D_METHOD("set_draw_queries_refresh_interval", "interval"), &NeighbourhoodServer::set_draw_queries_refresh_interval);
+	ClassDB::bind_method(D_METHOD("get_draw_queries_refresh_interval"), &NeighbourhoodServer::get_draw_queries_refresh_interval);
+
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "grid_size"), "set_grid_size", "get_grid_size");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_global_position"), "set_use_global_position", "get_use_global_position");
 	ADD_PROPERTY(PropertyInfo(Variant::RECT2, "domain"), "set_domain", "get_domain");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "draw_domain"), "set_draw_domain", "get_draw_domain");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "draw_queries_refresh_interval"), "set_draw_queries_refresh_interval", "get_draw_queries_refresh_interval");
 
 #if DEBUG_INFORMATION
 	ADD_SIGNAL(MethodInfo("debug_info",
@@ -66,9 +72,12 @@ void NeighbourhoodServer::_draw() {
 					if (count == 0) {
 						continue;
 					}
-					float alpha = static_cast<float>(count) / max_count;
+					float t = static_cast<float>(count) / max_count;
+					// from ColorBrewer: https://colorbrewer2.org/#type=sequential&scheme=Blues&n=9
+					const Color low(0xf7 / 255.0f, 0xfb / 255.0f, 0xff / 255.0f, 0.8f);
+					const Color high(0x08 / 255.0f, 0x30 / 255.0f, 0x6b / 255.0f, 0.8f);
 					draw_rect(Rect2(domain.position.x + cx * grid_size, domain.position.y + cy * grid_size, grid_size, grid_size),
-							Color(1.0f, 0.0f, 0.0f, alpha * 0.6f), true);
+							low.lerp(high, t), true);
 				}
 			}
 			std::fill(m_grid_querycount.begin(), m_grid_querycount.end(), 0);
@@ -199,26 +208,94 @@ void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
 	m_subscribers.erase(p_node);
 }
 
-Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
-	if ((int)m_subscribers.size() < m_brute_force_threshold) {
-		float max_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
-		float best_dist_sq = max_dist_sq;
-		const Subscriber *best = nullptr;
-		for (const auto &[node, s] : m_subscribers) {
-			if ((s.layer & p_layer_mask) == 0) {
-				continue;
-			}
-			float d = s.position.distance_squared_to(p_position);
-			if (d >= best_dist_sq) {
-				continue;
-			}
-			if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-				continue;
-			}
-			best_dist_sq = d;
-			best = &s;
+Variant NeighbourhoodServer::get_next_brute_force(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+	float best_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
+	const Subscriber *best = nullptr;
+	for (const auto &[node, s] : m_subscribers) {
+		if ((s.layer & p_layer_mask) == 0) {
+			continue;
 		}
-		return best ? best->data : Variant();
+		if (s.node_instance_id == p_exclude_id) {
+			continue;
+		}
+		float d = s.position.distance_squared_to(p_position);
+		if (d >= best_dist_sq) {
+			continue;
+		}
+		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+			continue;
+		}
+		best_dist_sq = d;
+		best = &s;
+	}
+	return best ? best->data : Variant();
+}
+
+Array NeighbourhoodServer::get_all_brute_force(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+	Array result;
+	float max_dist_sq = p_max_distance * p_max_distance;
+	for (const auto &[node, s] : m_subscribers) {
+		if ((s.layer & p_layer_mask) == 0) {
+			continue;
+		}
+		if (s.node_instance_id == p_exclude_id) {
+			continue;
+		}
+		if (s.position.distance_squared_to(p_position) > max_dist_sq) {
+			continue;
+		}
+		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+			continue;
+		}
+		result.push_back(s.data);
+	}
+	return result;
+}
+
+Array NeighbourhoodServer::get_closest_brute_force(const Vector2 &p_position, int p_max_count, float p_max_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+	using Entry = std::pair<float, Variant>;
+	auto cmp = [](const Entry &a, const Entry &b) { return a.first < b.first; };
+	std::vector<Entry> heap;
+	heap.reserve(p_max_count + 1);
+	float max_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
+	for (const auto &[node, s] : m_subscribers) {
+		if ((s.layer & p_layer_mask) == 0) {
+			continue;
+		}
+		if (s.node_instance_id == p_exclude_id) {
+			continue;
+		}
+		float d = s.position.distance_squared_to(p_position);
+		if (d > max_dist_sq) {
+			continue;
+		}
+		if ((int)heap.size() >= p_max_count && d >= heap[0].first) {
+			continue;
+		}
+		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+			continue;
+		}
+		heap.push_back({ d, s.data });
+		std::push_heap(heap.begin(), heap.end(), cmp);
+		if ((int)heap.size() > p_max_count) {
+			std::pop_heap(heap.begin(), heap.end(), cmp);
+			heap.pop_back();
+		}
+		if ((int)heap.size() == p_max_count) {
+			max_dist_sq = std::min(max_dist_sq, heap[0].first);
+		}
+	}
+	Array result;
+	for (const auto &[d, data] : heap) {
+		result.push_back(data);
+	}
+	return result;
+}
+
+Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
+	if ((int)m_subscribers.size() < m_brute_force_threshold) {
+		return get_next_brute_force(p_position, p_max_distance, p_layer_mask, exclude_id);
 	}
 
 	std::lock_guard<std::mutex> lock(m_grid_mutex);
@@ -265,6 +342,9 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
+				if (s.node_instance_id == exclude_id) {
+					continue;
+				}
 				float d = s.position.distance_squared_to(p_position);
 				if (d >= best_dist_sq) {
 					continue;
@@ -294,25 +374,13 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 	return best ? best->data : Variant();
 }
 
-Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
-	Array result;
-
+Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
 	if ((int)m_subscribers.size() < m_brute_force_threshold) {
-		float max_dist_sq = p_max_distance * p_max_distance;
-		for (const auto &[node, s] : m_subscribers) {
-			if ((s.layer & p_layer_mask) == 0) {
-				continue;
-			}
-			if (s.position.distance_squared_to(p_position) > max_dist_sq) {
-				continue;
-			}
-			if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-				continue;
-			}
-			result.push_back(s.data);
-		}
-		return result;
+		return get_all_brute_force(p_position, p_max_distance, p_layer_mask, exclude_id);
 	}
+
+	Array result;
 
 	std::lock_guard<std::mutex> lock(m_grid_mutex);
 
@@ -336,6 +404,9 @@ Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distan
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
+				if (s.node_instance_id == exclude_id) {
+					continue;
+				}
 				if (s.position.distance_squared_to(p_position) > max_dist_sq) {
 					continue;
 				}
@@ -350,13 +421,110 @@ Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distan
 	return result;
 }
 
+Array NeighbourhoodServer::get_closest(const Vector2 &p_position, int p_max_count, float p_max_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+	if (p_max_count <= 0) {
+		return Array();
+	}
+	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
+	if ((int)m_subscribers.size() < m_brute_force_threshold) {
+		return get_closest_brute_force(p_position, p_max_count, p_max_distance, p_layer_mask, exclude_id);
+	}
+
+	// NOTE: We use a maxheap keyed by squared distance such that heap[0] is always the farthest collected entry.
+	// Using a heap here allows us O(logn) for insert whereas a sorted array would be O(n).
+	using Entry = std::pair<float, Variant>;
+	auto cmp = [](const Entry &a, const Entry &b) { return a.first < b.first; };
+	std::vector<Entry> heap;
+	heap.reserve(p_max_count + 1);
+
+	float max_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
+
+	{
+		std::lock_guard<std::mutex> lock(m_grid_mutex);
+
+		int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
+		int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+
+		float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
+		if (p_max_distance <= 0.0f || p_max_distance > upper_bound) {
+			p_max_distance = upper_bound;
+		}
+		max_dist_sq = p_max_distance * p_max_distance;
+
+		auto check = [&](int cx, int cy) {
+			if (!is_cell_in_bounds(cx, cy)) {
+				return;
+			}
+			const int cell_idx = to_cell_index(cx, cy);
+#if DEBUG_INFORMATION
+			m_grid_querycount[cell_idx]++;
+#endif
+			for (const Subscriber &s : m_grid[cell_idx]) {
+				if ((s.layer & p_layer_mask) == 0) {
+					continue;
+				}
+				if (s.node_instance_id == exclude_id) {
+					continue;
+				}
+				float d = s.position.distance_squared_to(p_position);
+				if (d > max_dist_sq) {
+					continue;
+				}
+				if ((int)heap.size() >= p_max_count && d >= heap[0].first) {
+					continue;
+				}
+				if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+					continue;
+				}
+				heap.push_back({ d, s.data });
+				std::push_heap(heap.begin(), heap.end(), cmp);
+				if ((int)heap.size() > p_max_count) {
+					std::pop_heap(heap.begin(), heap.end(), cmp);
+					heap.pop_back();
+				}
+				if ((int)heap.size() == p_max_count) {
+					max_dist_sq = std::min(max_dist_sq, heap[0].first);
+				}
+			}
+		};
+
+		for (int r = 0;; r++) {
+			if (r > 0) {
+				float min_ring_dist = static_cast<float>((r - 1) * grid_size);
+				if (min_ring_dist * min_ring_dist >= max_dist_sq) {
+					break;
+				}
+			}
+
+			if (r == 0) {
+				check(cx0, cy0);
+			} else {
+				for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
+					check(cx, cy0 - r);
+					check(cx, cy0 + r);
+				}
+				for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
+					check(cx0 - r, cy);
+					check(cx0 + r, cy);
+				}
+			}
+		}
+	}
+
+	Array result;
+	for (const auto &[d, data] : heap) {
+		result.push_back(data);
+	}
+	return result;
+}
+
 #if DEBUG_INFORMATION
 void NeighbourhoodServer::_process(double p_delta) {
-	if (!draw_domain) {
+	if (!draw_domain || draw_queries_refresh_interval < 0.0f) {
 		return;
 	}
 	m_time_since_querycount_redraw += p_delta;
-	if (m_time_since_querycount_redraw >= 0.1) {
+	if (m_time_since_querycount_redraw >= draw_queries_refresh_interval) {
 		m_time_since_querycount_redraw = 0.0;
 		queue_redraw();
 	}
@@ -411,4 +579,12 @@ void NeighbourhoodServer::set_draw_domain(bool p_draw_domain) {
 
 bool NeighbourhoodServer::get_draw_domain() const {
 	return draw_domain;
+}
+
+void NeighbourhoodServer::set_draw_queries_refresh_interval(float p_interval) {
+	draw_queries_refresh_interval = p_interval;
+}
+
+float NeighbourhoodServer::get_draw_queries_refresh_interval() const {
+	return draw_queries_refresh_interval;
 }

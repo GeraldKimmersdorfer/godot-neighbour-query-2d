@@ -36,6 +36,7 @@ class NeighbourhoodServer : public Node2D {
 	double m_time_since_refresh = 0.0;
 	Rect2 domain = Rect2(0, 0, 1000, 600);
 	bool draw_domain = true;
+	float draw_queries_refresh_interval = 0.1f;
 	// NOTE: get_global_position() accounts for a big portion of refresh time, so we
 	// allow the user to use get_position() instead
 	bool use_global_position = true;
@@ -67,6 +68,9 @@ class NeighbourhoodServer : public Node2D {
 	int to_cell_index(int cx, int cy) const;
 	void _update_grid_dimensions();
 	void refresh();
+	Variant get_next_brute_force(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Array get_all_brute_force(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Array get_closest_brute_force(const Vector2 &p_position, int p_max_count, float p_max_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
 
 #if DEBUG_INFORMATION
 	std::vector<int> m_grid_querycount;
@@ -90,8 +94,9 @@ public:
 
 	void subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data);
 	void unsubscribe(Node2D *p_node);
-	Variant get_next(const Vector2 &p_position, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF);
-	Array get_all(const Vector2 &p_position, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF);
+	Variant get_next(const Vector2 &p_position, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
+	Array get_all(const Vector2 &p_position, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
+	Array get_closest(const Vector2 &p_position, int p_max_count, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
 
 	void set_grid_size(int p_grid_size);
 	int get_grid_size() const;
@@ -107,4 +112,7 @@ public:
 
 	void set_draw_domain(bool p_draw_domain);
 	bool get_draw_domain() const;
+
+	void set_draw_queries_refresh_interval(float p_interval);
+	float get_draw_queries_refresh_interval() const;
 };

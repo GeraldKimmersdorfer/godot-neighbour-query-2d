@@ -10,6 +10,7 @@ func _ready() -> void:
 	var angle := randf() * TAU
 	velocity = Vector2(cos(angle), sin(angle)) * speed
 
+
 func _process(delta: float) -> void:
 	if not moving:
 		return
