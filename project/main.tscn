@@ -14,7 +14,7 @@ expand_margin_bottom = 10.0
 script = ExtResource("1_ig7tw")
 _info_label = NodePath("InfoLabel")
 dot_template = ExtResource("2_0xm2m")
-dot_count = 10000
+dot_count = 5000
 
 [node name="InfoLabel" type="Label" parent="." unique_id=524208133]
 z_index = 1
@@ -30,4 +30,3 @@ grid_size = 64
 refresh_intervall = 0.0
 use_global_position = false
 domain = Rect2(0, 0, 1400, 900)
-draw_domain = false

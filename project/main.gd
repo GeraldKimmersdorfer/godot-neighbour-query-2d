@@ -7,22 +7,23 @@ extends Node2D
 @export var dot_template: PackedScene
 @export var dot_count: int = 1000
 
+enum QueryMode { GET_ALL, GET_NEXT }
+
 var _dots: Array[Node2D] = []
 var _highlighted: Array[CanvasItem] = []
-var _closest_dot: Node2D = null
-var _debug_cells: bool = false
+var _mode: QueryMode = QueryMode.GET_ALL
 var _query_radius: float = 100.0
 var _debug_info: Dictionary = {}
 
-const _AVG_ALPHA := 0.01 # running average smoothing factor
-var _avg_get_all_ms: float = 0.0
-var _avg_get_next_ms: float = 0.0
-var _avg_refresh_total_ms: float = 0.0
+const _AVG_ALPHA := 0.02 # running average smoothing factor
+var _avgs: Dictionary = {
+	"query_ms": 0.0,
+	"refresh_total_ms": 0.0,
+}
 
 @onready var _ns: NeighbourhoodServer = $NeighbourhoodServer
 
 func _ready() -> void:
-	_debug_cells = _ns.has_method("get_last_queried_cells")
 	if _ns.has_signal("debug_info"):
 		_ns.debug_info.connect(_on_ns_debug_info)
 	get_viewport().size_changed.connect(_on_viewport_size_changed)
@@ -52,13 +53,18 @@ func _on_viewport_size_changed() -> void:
 		dot.bounds = bounds
 
 func _on_ns_debug_info(key: String, value: Variant) -> void:
-	if key == "refresh_total_ms":
-		_avg_refresh_total_ms += _AVG_ALPHA * (float(value) - _avg_refresh_total_ms)
-		_debug_info[key] = _avg_refresh_total_ms
+	if key in _avgs:
+		_avgs[key] += _AVG_ALPHA * (float(value) - _avgs[key])
+		_debug_info[key] = _avgs[key]
 	else:
 		_debug_info[key] = value
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed:
+		if event.keycode == KEY_1:
+			_mode = QueryMode.GET_ALL
+		elif event.keycode == KEY_2:
+			_mode = QueryMode.GET_NEXT
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_query_radius = _query_radius + 10.0
@@ -76,8 +82,6 @@ func _spawn_dot() -> void:
 
 func _remove_dot(dot: Node2D, call_unsubscribe: bool) -> void:
 	_dots.erase(dot)
-	if _closest_dot == dot:
-		_closest_dot = null
 	_highlighted.erase(dot)
 	if call_unsubscribe:
 		_ns.unsubscribe(dot)
@@ -100,27 +104,26 @@ func _physics_process(_delta: float) -> void:
 	_highlighted.clear()
 
 	var mouse_pos := get_global_mouse_position()
-
 	var t := Time.get_ticks_usec()
-	var neighbours := _ns.get_all(mouse_pos, _query_radius)
-	_avg_get_all_ms += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avg_get_all_ms)
-	for n in neighbours:
-		var dot := n as CanvasItem
-		if dot:
-			dot.modulate = Color(1.0, 0.0, 0.0)
-			_highlighted.append(dot)
 
-	if is_instance_valid(_closest_dot):
-		(_closest_dot as CanvasItem).modulate = Color.WHITE
-	t = Time.get_ticks_usec()
-	_closest_dot = _ns.get_next(mouse_pos) as Node2D
-	_avg_get_next_ms += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avg_get_next_ms)
-	if _closest_dot:
-		(_closest_dot as CanvasItem).modulate = Color(0.0, 1.0, 0.0)
+	if _mode == QueryMode.GET_ALL:
+		var neighbours := _ns.get_all(mouse_pos, _query_radius)
+		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
+		for n in neighbours:
+			var dot = n
+			if dot:
+				dot.modulate = Color(1.0, 0.0, 0.0)
+				_highlighted.append(dot)
+	else:
+		var closest = _ns.get_next(mouse_pos)
+		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
+		if closest:
+			closest.modulate = Color(1.0, 0.0, 0.0)
+			_highlighted.append(closest)
 
 	if _info_label:
-		var text := "get_all:  %.3f ms (avg)\nget_next: %.3f ms (avg)\nradius: %.0f px" % [
-			_avg_get_all_ms, _avg_get_next_ms, _query_radius
+		var text := "mode: %s\nquery:    %.3f ms (avg)\nradius: %.0f px" % [
+			QueryMode.keys()[_mode], _avgs["query_ms"], _query_radius
 		]
 		for key in _debug_info:
 			text += "\n%s: %s" % [key, str(_debug_info[key])]
