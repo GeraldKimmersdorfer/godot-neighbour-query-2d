@@ -62,6 +62,10 @@
 		<member name="draw_domain" type="bool" setter="set_draw_domain" getter="get_draw_domain" default="true">
 			When [code]true[/code], the server draws the [member domain] boundary and grid overlay using [method CanvasItem.draw_rect] and [method CanvasItem.draw_line]. In debug builds, queried cells are also highlighted in red proportional to their query frequency.
 		</member>
+		<member name="draw_queries_refresh_interval" type="float" setter="set_draw_queries_refresh_interval" getter="get_draw_queries_refresh_interval" default="0.1">
+			Interval in seconds between redraws of the query-count heatmap. Only has an effect when [member draw_domain] is [code]true[/code] and the project is running in a debug build. Set to a negative value to disable query drawing entirely.
+			[b]Warning:[/b] This feature is intended for debugging only. Frequent redraws at low intervals are very expensive at scale and will noticeably impact performance.
+		</member>
 	</members>
 	<signals>
 		<signal name="debug_info">

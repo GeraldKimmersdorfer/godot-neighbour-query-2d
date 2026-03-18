@@ -36,6 +36,7 @@ class NeighbourhoodServer : public Node2D {
 	double m_time_since_refresh = 0.0;
 	Rect2 domain = Rect2(0, 0, 1000, 600);
 	bool draw_domain = true;
+	float draw_queries_refresh_interval = 0.1f;
 	// NOTE: get_global_position() accounts for a big portion of refresh time, so we
 	// allow the user to use get_position() instead
 	bool use_global_position = true;
@@ -107,4 +108,7 @@ public:
 
 	void set_draw_domain(bool p_draw_domain);
 	bool get_draw_domain() const;
+
+	void set_draw_queries_refresh_interval(float p_interval);
+	float get_draw_queries_refresh_interval() const;
 };

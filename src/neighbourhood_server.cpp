@@ -30,11 +30,15 @@ void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_draw_domain", "draw_domain"), &NeighbourhoodServer::set_draw_domain);
 	ClassDB::bind_method(D_METHOD("get_draw_domain"), &NeighbourhoodServer::get_draw_domain);
 
+	ClassDB::bind_method(D_METHOD("set_draw_queries_refresh_interval", "interval"), &NeighbourhoodServer::set_draw_queries_refresh_interval);
+	ClassDB::bind_method(D_METHOD("get_draw_queries_refresh_interval"), &NeighbourhoodServer::get_draw_queries_refresh_interval);
+
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "grid_size"), "set_grid_size", "get_grid_size");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_global_position"), "set_use_global_position", "get_use_global_position");
 	ADD_PROPERTY(PropertyInfo(Variant::RECT2, "domain"), "set_domain", "get_domain");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "draw_domain"), "set_draw_domain", "get_draw_domain");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "draw_queries_refresh_interval"), "set_draw_queries_refresh_interval", "get_draw_queries_refresh_interval");
 
 #if DEBUG_INFORMATION
 	ADD_SIGNAL(MethodInfo("debug_info",
@@ -66,9 +70,12 @@ void NeighbourhoodServer::_draw() {
 					if (count == 0) {
 						continue;
 					}
-					float alpha = static_cast<float>(count) / max_count;
+					float t = static_cast<float>(count) / max_count;
+					// from ColorBrewer: https://colorbrewer2.org/#type=sequential&scheme=Blues&n=9
+					const Color low(0xf7 / 255.0f, 0xfb / 255.0f, 0xff / 255.0f, 0.8f);
+					const Color high(0x08 / 255.0f, 0x30 / 255.0f, 0x6b / 255.0f, 0.8f);
 					draw_rect(Rect2(domain.position.x + cx * grid_size, domain.position.y + cy * grid_size, grid_size, grid_size),
-							Color(1.0f, 0.0f, 0.0f, alpha * 0.6f), true);
+							low.lerp(high, t), true);
 				}
 			}
 			std::fill(m_grid_querycount.begin(), m_grid_querycount.end(), 0);
@@ -352,11 +359,11 @@ Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distan
 
 #if DEBUG_INFORMATION
 void NeighbourhoodServer::_process(double p_delta) {
-	if (!draw_domain) {
+	if (!draw_domain || draw_queries_refresh_interval < 0.0f) {
 		return;
 	}
 	m_time_since_querycount_redraw += p_delta;
-	if (m_time_since_querycount_redraw >= 0.1) {
+	if (m_time_since_querycount_redraw >= draw_queries_refresh_interval) {
 		m_time_since_querycount_redraw = 0.0;
 		queue_redraw();
 	}
@@ -411,4 +418,12 @@ void NeighbourhoodServer::set_draw_domain(bool p_draw_domain) {
 
 bool NeighbourhoodServer::get_draw_domain() const {
 	return draw_domain;
+}
+
+void NeighbourhoodServer::set_draw_queries_refresh_interval(float p_interval) {
+	draw_queries_refresh_interval = p_interval;
+}
+
+float NeighbourhoodServer::get_draw_queries_refresh_interval() const {
+	return draw_queries_refresh_interval;
 }
