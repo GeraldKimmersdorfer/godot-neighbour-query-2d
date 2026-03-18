@@ -93,6 +93,7 @@ public:
 	void unsubscribe(Node2D *p_node);
 	Variant get_next(const Vector2 &p_position, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF);
 	Array get_all(const Vector2 &p_position, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF);
+	Array get_closest(const Vector2 &p_position, int p_max_count, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF);
 
 	void set_grid_size(int p_grid_size);
 	int get_grid_size() const;

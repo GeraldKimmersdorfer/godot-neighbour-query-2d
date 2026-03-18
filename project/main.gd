@@ -7,12 +7,13 @@ extends Node2D
 @export var dot_template: PackedScene
 @export var dot_count: int = 1000
 
-enum QueryMode { GET_ALL, GET_NEXT }
+enum QueryMode { GET_ALL, GET_NEXT, GET_CLOSEST }
 
 var _dots: Array[Node2D] = []
 var _highlighted: Array[CanvasItem] = []
 var _mode: QueryMode = QueryMode.GET_ALL
 var _query_radius: float = 100.0
+var _closest_count: int = 5
 var _debug_info: Dictionary = {}
 
 const _AVG_ALPHA := 0.02 # running average smoothing factor
@@ -65,6 +66,8 @@ func _input(event: InputEvent) -> void:
 			_mode = QueryMode.GET_ALL
 		elif event.keycode == KEY_2:
 			_mode = QueryMode.GET_NEXT
+		elif event.keycode == KEY_3:
+			_mode = QueryMode.GET_CLOSEST
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_query_radius = _query_radius + 10.0
@@ -114,17 +117,25 @@ func _physics_process(_delta: float) -> void:
 			if dot:
 				dot.modulate = Color(1.0, 0.0, 0.0)
 				_highlighted.append(dot)
-	else:
+	elif _mode == QueryMode.GET_NEXT:
 		var closest = _ns.get_next(mouse_pos)
 		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
 		if closest:
 			closest.modulate = Color(1.0, 0.0, 0.0)
 			_highlighted.append(closest)
+	else:
+		var neighbours := _ns.get_closest(mouse_pos, _closest_count, _query_radius)
+		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
+		for n in neighbours:
+			var dot = n
+			if dot:
+				dot.modulate = Color(1.0, 0.0, 0.0)
+				_highlighted.append(dot)
 
 	if _info_label:
 		var text := "mode: %s\nquery:    %.3f ms (avg)\nradius: %.0f px" % [
 			QueryMode.keys()[_mode], _avgs["query_ms"], _query_radius
 		]
 		for key in _debug_info:
-			text += "\n%s: %s" % [key, str(_debug_info[key])]
+			text += "\n%s: %.3f" % [key, _debug_info[key]]
 		_info_label.text = text
