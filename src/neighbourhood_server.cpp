@@ -208,26 +208,84 @@ void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
 	m_subscribers.erase(p_node);
 }
 
+Variant NeighbourhoodServer::get_next_brute_force(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
+	float best_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
+	const Subscriber *best = nullptr;
+	for (const auto &[node, s] : m_subscribers) {
+		if ((s.layer & p_layer_mask) == 0) {
+			continue;
+		}
+		float d = s.position.distance_squared_to(p_position);
+		if (d >= best_dist_sq) {
+			continue;
+		}
+		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+			continue;
+		}
+		best_dist_sq = d;
+		best = &s;
+	}
+	return best ? best->data : Variant();
+}
+
+Array NeighbourhoodServer::get_all_brute_force(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
+	Array result;
+	float max_dist_sq = p_max_distance * p_max_distance;
+	for (const auto &[node, s] : m_subscribers) {
+		if ((s.layer & p_layer_mask) == 0) {
+			continue;
+		}
+		if (s.position.distance_squared_to(p_position) > max_dist_sq) {
+			continue;
+		}
+		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+			continue;
+		}
+		result.push_back(s.data);
+	}
+	return result;
+}
+
+Array NeighbourhoodServer::get_closest_brute_force(const Vector2 &p_position, int p_max_count, float p_max_distance, uint32_t p_layer_mask) {
+	using Entry = std::pair<float, Variant>;
+	auto cmp = [](const Entry &a, const Entry &b) { return a.first < b.first; };
+	std::vector<Entry> heap;
+	heap.reserve(p_max_count + 1);
+	float max_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
+	for (const auto &[node, s] : m_subscribers) {
+		if ((s.layer & p_layer_mask) == 0) {
+			continue;
+		}
+		float d = s.position.distance_squared_to(p_position);
+		if (d > max_dist_sq) {
+			continue;
+		}
+		if ((int)heap.size() >= p_max_count && d >= heap[0].first) {
+			continue;
+		}
+		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+			continue;
+		}
+		heap.push_back({ d, s.data });
+		std::push_heap(heap.begin(), heap.end(), cmp);
+		if ((int)heap.size() > p_max_count) {
+			std::pop_heap(heap.begin(), heap.end(), cmp);
+			heap.pop_back();
+		}
+		if ((int)heap.size() == p_max_count) {
+			max_dist_sq = std::min(max_dist_sq, heap[0].first);
+		}
+	}
+	Array result;
+	for (const auto &[d, data] : heap) {
+		result.push_back(data);
+	}
+	return result;
+}
+
 Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
 	if ((int)m_subscribers.size() < m_brute_force_threshold) {
-		float max_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
-		float best_dist_sq = max_dist_sq;
-		const Subscriber *best = nullptr;
-		for (const auto &[node, s] : m_subscribers) {
-			if ((s.layer & p_layer_mask) == 0) {
-				continue;
-			}
-			float d = s.position.distance_squared_to(p_position);
-			if (d >= best_dist_sq) {
-				continue;
-			}
-			if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-				continue;
-			}
-			best_dist_sq = d;
-			best = &s;
-		}
-		return best ? best->data : Variant();
+		return get_next_brute_force(p_position, p_max_distance, p_layer_mask);
 	}
 
 	std::lock_guard<std::mutex> lock(m_grid_mutex);
@@ -304,24 +362,11 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 }
 
 Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask) {
-	Array result;
-
 	if ((int)m_subscribers.size() < m_brute_force_threshold) {
-		float max_dist_sq = p_max_distance * p_max_distance;
-		for (const auto &[node, s] : m_subscribers) {
-			if ((s.layer & p_layer_mask) == 0) {
-				continue;
-			}
-			if (s.position.distance_squared_to(p_position) > max_dist_sq) {
-				continue;
-			}
-			if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-				continue;
-			}
-			result.push_back(s.data);
-		}
-		return result;
+		return get_all_brute_force(p_position, p_max_distance, p_layer_mask);
 	}
+
+	Array result;
 
 	std::lock_guard<std::mutex> lock(m_grid_mutex);
 
@@ -360,9 +405,11 @@ Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distan
 }
 
 Array NeighbourhoodServer::get_closest(const Vector2 &p_position, int p_max_count, float p_max_distance, uint32_t p_layer_mask) {
-	Array result;
 	if (p_max_count <= 0) {
-		return result;
+		return Array();
+	}
+	if ((int)m_subscribers.size() < m_brute_force_threshold) {
+		return get_closest_brute_force(p_position, p_max_count, p_max_distance, p_layer_mask);
 	}
 
 	// NOTE: We use a maxheap keyed by squared distance such that heap[0] is always the farthest collected entry.
@@ -374,32 +421,7 @@ Array NeighbourhoodServer::get_closest(const Vector2 &p_position, int p_max_coun
 
 	float max_dist_sq = p_max_distance > 0.0f ? p_max_distance * p_max_distance : std::numeric_limits<float>::max();
 
-	if ((int)m_subscribers.size() < m_brute_force_threshold) {
-		for (const auto &[node, s] : m_subscribers) {
-			if ((s.layer & p_layer_mask) == 0) {
-				continue;
-			}
-			float d = s.position.distance_squared_to(p_position);
-			if (d > max_dist_sq) {
-				continue;
-			}
-			if ((int)heap.size() >= p_max_count && d >= heap[0].first) {
-				continue;
-			}
-			if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-				continue;
-			}
-			heap.push_back({ d, s.data });
-			std::push_heap(heap.begin(), heap.end(), cmp);
-			if ((int)heap.size() > p_max_count) {
-				std::pop_heap(heap.begin(), heap.end(), cmp);
-				heap.pop_back();
-			}
-			if ((int)heap.size() == p_max_count) {
-				max_dist_sq = std::min(max_dist_sq, heap[0].first);
-			}
-		}
-	} else {
+	{
 		std::lock_guard<std::mutex> lock(m_grid_mutex);
 
 		int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
@@ -468,6 +490,7 @@ Array NeighbourhoodServer::get_closest(const Vector2 &p_position, int p_max_coun
 		}
 	}
 
+	Array result;
 	for (const auto &[d, data] : heap) {
 		result.push_back(data);
 	}

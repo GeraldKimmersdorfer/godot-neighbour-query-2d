@@ -68,6 +68,9 @@ class NeighbourhoodServer : public Node2D {
 	int to_cell_index(int cx, int cy) const;
 	void _update_grid_dimensions();
 	void refresh();
+	Variant get_next_brute_force(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask);
+	Array get_all_brute_force(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask);
+	Array get_closest_brute_force(const Vector2 &p_position, int p_max_count, float p_max_distance, uint32_t p_layer_mask);
 
 #if DEBUG_INFORMATION
 	std::vector<int> m_grid_querycount;
