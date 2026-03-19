@@ -25,19 +25,27 @@ struct Subscriber {
 	uint64_t node_instance_id = 0;
 	uint32_t layer = 0;
 	Variant data;
-	// NOTE: I tried glm::vec2, also with intrinsics enabled, but no performance gain. godot::Vector2 is fine
+	// NOTE: I already tried glm::vec2, also with intrinsics enabled, but no performance gain. godot::Vector2 is fine
 	Vector2 position;
 };
 
 class NeighbourhoodServer : public Node2D {
 	GDCLASS(NeighbourhoodServer, Node2D)
 
+public:
+	enum DebugHeatmapMode {
+		CELL_READS = 0,  // how many times each cell was visited by query traversal
+		QUERY_COUNTS = 1, // how many queries originated from within each cell
+	};
+
+private:
 	int grid_size = 128;
 	float refresh_intervall = 0.0f;
 	double m_time_since_refresh = 0.0;
 	Rect2 domain = Rect2(0, 0, 1000, 600);
-	bool draw_domain = true;
-	float draw_queries_refresh_interval = 1.0f;
+	bool debug_draw_domain = true;
+	float debug_draw_heatmap_intervall = 1.0f;
+	DebugHeatmapMode debug_heatmap_mode = CELL_READS;
 	// NOTE: get_global_position() accounts for a big portion of refresh time, so we
 	// allow the user to use get_position() instead
 	bool use_global_position = true;
@@ -46,7 +54,7 @@ class NeighbourhoodServer : public Node2D {
 	// dont have to check use_global_position for each subscriber in each refresh iteration
 	Vector2 (Node2D::*m_get_position)() const = &Node2D::get_global_position;
 
-	// NOTE: We still keep they Node2D* reference as key for m_subscribers since we otherwise
+	// NOTE: We still keep the Node2D* reference as key for m_subscribers since we otherwise
 	// have to cast node_instance_id to Node2D* and that seems expensive.
 	// WARNING: It may point to freed memory so before use a validity check using the
 	// node_instance_id is necessary!
@@ -78,7 +86,10 @@ class NeighbourhoodServer : public Node2D {
 	Array get_closest_grid(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
 
 #if DEBUG_INFORMATION
+	// CELL_READS: incremented each time a cell is visited during a query
 	std::vector<int> m_grid_querycount;
+	// QUERY_COUNTS: incremented once per query call, in the cell that contains the query position
+	std::vector<int> m_grid_querycount_origin;
 	double m_time_since_querycount_redraw = 0.0;
 #endif
 
@@ -117,9 +128,14 @@ public:
 	void set_domain(const Rect2 &p_domain);
 	Rect2 get_domain() const;
 
-	void set_draw_domain(bool p_draw_domain);
-	bool get_draw_domain() const;
+	void set_debug_draw_domain(bool p_debug_draw_domain);
+	bool get_debug_draw_domain() const;
 
-	void set_draw_queries_refresh_interval(float p_interval);
-	float get_draw_queries_refresh_interval() const;
+	void set_debug_draw_heatmap_intervall(float p_interval);
+	float get_debug_draw_heatmap_intervall() const;
+
+	void set_debug_heatmap_mode(DebugHeatmapMode p_mode);
+	DebugHeatmapMode get_debug_heatmap_mode() const;
 };
+
+VARIANT_ENUM_CAST(NeighbourhoodServer::DebugHeatmapMode);

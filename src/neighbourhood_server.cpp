@@ -35,28 +35,36 @@ void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_domain", "domain"), &NeighbourhoodServer::set_domain);
 	ClassDB::bind_method(D_METHOD("get_domain"), &NeighbourhoodServer::get_domain);
 
-	ClassDB::bind_method(D_METHOD("set_draw_domain", "draw_domain"), &NeighbourhoodServer::set_draw_domain);
-	ClassDB::bind_method(D_METHOD("get_draw_domain"), &NeighbourhoodServer::get_draw_domain);
+	ClassDB::bind_method(D_METHOD("set_debug_draw_domain", "debug_draw_domain"), &NeighbourhoodServer::set_debug_draw_domain);
+	ClassDB::bind_method(D_METHOD("get_debug_draw_domain"), &NeighbourhoodServer::get_debug_draw_domain);
 
-	ClassDB::bind_method(D_METHOD("set_draw_queries_refresh_interval", "interval"), &NeighbourhoodServer::set_draw_queries_refresh_interval);
-	ClassDB::bind_method(D_METHOD("get_draw_queries_refresh_interval"), &NeighbourhoodServer::get_draw_queries_refresh_interval);
+	ClassDB::bind_method(D_METHOD("set_debug_draw_heatmap_intervall", "interval"), &NeighbourhoodServer::set_debug_draw_heatmap_intervall);
+	ClassDB::bind_method(D_METHOD("get_debug_draw_heatmap_intervall"), &NeighbourhoodServer::get_debug_draw_heatmap_intervall);
+
+	ClassDB::bind_method(D_METHOD("set_debug_heatmap_mode", "mode"), &NeighbourhoodServer::set_debug_heatmap_mode);
+	ClassDB::bind_method(D_METHOD("get_debug_heatmap_mode"), &NeighbourhoodServer::get_debug_heatmap_mode);
+
+	BIND_ENUM_CONSTANT(CELL_READS);
+	BIND_ENUM_CONSTANT(QUERY_COUNTS);
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "grid_size"), "set_grid_size", "get_grid_size");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_global_position"), "set_use_global_position", "get_use_global_position");
 	ADD_PROPERTY(PropertyInfo(Variant::RECT2, "domain"), "set_domain", "get_domain");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "draw_domain"), "set_draw_domain", "get_draw_domain");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "draw_queries_refresh_interval"), "set_draw_queries_refresh_interval", "get_draw_queries_refresh_interval");
 
-#if DEBUG_INFORMATION
+	ADD_GROUP("Debug", "debug_");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "debug_draw_domain"), "set_debug_draw_domain", "get_debug_draw_domain");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "debug_draw_heatmap_intervall"), "set_debug_draw_heatmap_intervall", "get_debug_draw_heatmap_intervall");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "debug_heatmap_mode", PROPERTY_HINT_ENUM, "CellReads,QueryCounts"), "set_debug_heatmap_mode", "get_debug_heatmap_mode");
+	ADD_GROUP("", "");
+
 	ADD_SIGNAL(MethodInfo("debug_info",
 			PropertyInfo(Variant::STRING, "name"),
 			PropertyInfo(Variant::NIL, "value", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NIL_IS_VARIANT)));
-#endif
 }
 
 void NeighbourhoodServer::_draw() {
-	if (!draw_domain) {
+	if (!debug_draw_domain) {
 		return;
 	}
 	const Color border_color(1.0f, 1.0f, 1.0f, 0.8f);
@@ -67,15 +75,16 @@ void NeighbourhoodServer::_draw() {
 
 #if DEBUG_INFORMATION
 	{
+		const std::vector<int> &counts = (debug_heatmap_mode == QUERY_COUNTS) ? m_grid_querycount_origin : m_grid_querycount;
 		int max_count = 0;
-		for (int c : m_grid_querycount) {
+		for (int c : counts) {
 			max_count = std::max(max_count, c);
 		}
 		if (max_count > 0) {
 			Ref<Font> font = ThemeDB::get_singleton()->get_fallback_font();
 			for (int cy = 0; cy < m_grid_rows; cy++) {
 				for (int cx = 0; cx < m_grid_cols; cx++) {
-					int count = m_grid_querycount[to_cell_index(cx, cy)];
+					int count = counts[to_cell_index(cx, cy)];
 					if (count == 0) {
 						continue;
 					}
@@ -89,9 +98,9 @@ void NeighbourhoodServer::_draw() {
 				}
 			}
 			std::fill(m_grid_querycount.begin(), m_grid_querycount.end(), 0);
+			std::fill(m_grid_querycount_origin.begin(), m_grid_querycount_origin.end(), 0);
 		}
 	}
-
 #endif
 
 	draw_rect(domain, border_color, false, 2.0f);
@@ -161,6 +170,7 @@ void NeighbourhoodServer::_update_grid_dimensions() {
 	m_grid_build.assign(cell_count, {});
 #if DEBUG_INFORMATION
 	m_grid_querycount.assign(cell_count, 0);
+	m_grid_querycount_origin.assign(cell_count, 0);
 #endif
 	m_grid.assign(cell_count, {});
 }
@@ -307,6 +317,11 @@ Array NeighbourhoodServer::get_closest_brute_force(const Vector2 &p_position, in
 Variant NeighbourhoodServer::get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
 	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+#if DEBUG_INFORMATION
+	if (is_cell_in_bounds(cx0, cy0)) {
+		m_grid_querycount_origin[to_cell_index(cx0, cy0)]++;
+	}
+#endif
 
 	// NOTE: Cap max_distance to guarantee loop termination.
 	// dist-to-center + diagonal is a safe upper bound for the farthest reachable point in the domain.
@@ -419,6 +434,11 @@ Variant NeighbourhoodServer::get_next_first_brute_force(const Vector2 &p_positio
 Variant NeighbourhoodServer::get_next_first_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
 	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+#if DEBUG_INFORMATION
+	if (is_cell_in_bounds(cx0, cy0)) {
+		m_grid_querycount_origin[to_cell_index(cx0, cy0)]++;
+	}
+#endif
 
 	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
 	if (p_max_distance > upper_bound) {
@@ -490,6 +510,16 @@ Variant NeighbourhoodServer::get_next_first(const Vector2 &p_position, float p_m
 Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	Array result;
 
+#if DEBUG_INFORMATION
+	{
+		int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
+		int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+		if (is_cell_in_bounds(cx0, cy0)) {
+			m_grid_querycount_origin[to_cell_index(cx0, cy0)]++;
+		}
+	}
+#endif
+
 	// Cap to domain bounds to avoid overflow in cell range computation when p_max_distance is very large.
 	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
 	float range = std::min(p_max_distance, upper_bound);
@@ -550,6 +580,11 @@ Array NeighbourhoodServer::get_closest_grid(const Vector2 &p_position, int p_max
 
 	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
 	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+#if DEBUG_INFORMATION
+	if (is_cell_in_bounds(cx0, cy0)) {
+		m_grid_querycount_origin[to_cell_index(cx0, cy0)]++;
+	}
+#endif
 
 	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
 	if (p_max_distance > upper_bound) {
@@ -635,11 +670,11 @@ Array NeighbourhoodServer::get_closest(const Vector2 &p_position, int p_max_coun
 #if DEBUG_INFORMATION
 void NeighbourhoodServer::_process(double p_delta) {
 	if (Engine::get_singleton()->is_editor_hint()) return;
-	if (!draw_domain || draw_queries_refresh_interval < 0.0f) {
+	if (!debug_draw_domain || debug_draw_heatmap_intervall < 0.0f) {
 		return;
 	}
 	m_time_since_querycount_redraw += p_delta;
-	if (m_time_since_querycount_redraw >= draw_queries_refresh_interval) {
+	if (m_time_since_querycount_redraw >= debug_draw_heatmap_intervall) {
 		m_time_since_querycount_redraw = 0.0;
 		queue_redraw();
 	}
@@ -687,19 +722,27 @@ Rect2 NeighbourhoodServer::get_domain() const {
 	return domain;
 }
 
-void NeighbourhoodServer::set_draw_domain(bool p_draw_domain) {
-	draw_domain = p_draw_domain;
+void NeighbourhoodServer::set_debug_draw_domain(bool p_debug_draw_domain) {
+	debug_draw_domain = p_debug_draw_domain;
 	queue_redraw();
 }
 
-bool NeighbourhoodServer::get_draw_domain() const {
-	return draw_domain;
+bool NeighbourhoodServer::get_debug_draw_domain() const {
+	return debug_draw_domain;
 }
 
-void NeighbourhoodServer::set_draw_queries_refresh_interval(float p_interval) {
-	draw_queries_refresh_interval = p_interval;
+void NeighbourhoodServer::set_debug_draw_heatmap_intervall(float p_interval) {
+	debug_draw_heatmap_intervall = p_interval;
 }
 
-float NeighbourhoodServer::get_draw_queries_refresh_interval() const {
-	return draw_queries_refresh_interval;
+float NeighbourhoodServer::get_debug_draw_heatmap_intervall() const {
+	return debug_draw_heatmap_intervall;
+}
+
+void NeighbourhoodServer::set_debug_heatmap_mode(DebugHeatmapMode p_mode) {
+	debug_heatmap_mode = p_mode;
+}
+
+NeighbourhoodServer::DebugHeatmapMode NeighbourhoodServer::get_debug_heatmap_mode() const {
+	return debug_heatmap_mode;
 }

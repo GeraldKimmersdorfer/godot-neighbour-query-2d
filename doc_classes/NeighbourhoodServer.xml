@@ -95,6 +95,14 @@
 			</description>
 		</method>
 	</methods>
+	<constants>
+		<constant name="CELL_READS" value="0" enum="DebugHeatmapMode">
+			Heatmap shows how many times each grid cell was visited during query traversal (cell reads).
+		</constant>
+		<constant name="QUERY_COUNTS" value="1" enum="DebugHeatmapMode">
+			Heatmap shows how many queries originated from within each cell (query origin density).
+		</constant>
+	</constants>
 	<members>
 		<member name="grid_size" type="int" setter="set_grid_size" getter="get_grid_size" default="128">
 			Width and height of each spatial grid cell in world units. Should be somewhere around the average interaction radius of your queries.
@@ -109,13 +117,17 @@
 		<member name="domain" type="Rect2" setter="set_domain" getter="get_domain" default="Rect2(0, 0, 1000, 600)">
 			The world-space rectangle that defines the active area. Subscribers located outside this rectangle are ignored during each grid refresh and will not appear in query results.
 		</member>
-		<member name="draw_domain" type="bool" setter="set_draw_domain" getter="get_draw_domain" default="true">
+		<member name="debug_draw_domain" type="bool" setter="set_debug_draw_domain" getter="get_debug_draw_domain" default="true">
 			When [code]true[/code], the server draws the [member domain] boundary and grid overlay using the Node2D._draw API.
 			[b]Warning:[/b] This feature is intended for debugging only.
 		</member>
-		<member name="draw_queries_refresh_interval" type="float" setter="set_draw_queries_refresh_interval" getter="get_draw_queries_refresh_interval" default="1.0">
-			Interval in seconds between redraws of the query-count heatmap. Only has an effect when [member draw_domain] is [code]true[/code]. Set to a negative value to disable query drawing entirely.
+		<member name="debug_draw_heatmap_intervall" type="float" setter="set_debug_draw_heatmap_intervall" getter="get_debug_draw_heatmap_intervall" default="1.0">
+			Interval in seconds between redraws of the query heatmap. Only has an effect when [member debug_draw_domain] is [code]true[/code]. Set to a negative value to disable heatmap drawing entirely.
 			[b]Warning:[/b] This feature is intended for debugging only. Frequent redraws at low intervals are very expensive at scale and will noticeably impact performance.
+			[b]Warning:[/b] Heatmap data is only collected in debug builds ([code]DEBUG_INFORMATION[/code]). The property exists in all builds but has no visual effect in release.
+		</member>
+		<member name="debug_heatmap_mode" type="int" setter="set_debug_heatmap_mode" getter="get_debug_heatmap_mode" enum="NeighbourhoodServer.DebugHeatmapMode" default="0">
+			Controls what the heatmap visualises. [constant CELL_READS] shows how many times each grid cell was visited during query traversal. [constant QUERY_COUNTS] shows how many queries originated from within each cell.
 			[b]Warning:[/b] Only available in debug builds!
 		</member>
 	</members>

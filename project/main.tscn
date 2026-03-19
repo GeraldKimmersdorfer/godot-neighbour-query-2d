@@ -27,6 +27,5 @@ text = "InfoBox"
 
 [node name="NeighbourhoodServer" type="NeighbourhoodServer" parent="." unique_id=588930159]
 grid_size = 64
-refresh_intervall = 0.0
 use_global_position = false
 domain = Rect2(0, 0, 1400, 900)
