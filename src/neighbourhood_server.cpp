@@ -18,6 +18,7 @@ void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer", "data"), &NeighbourhoodServer::subscribe);
 	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourhoodServer::unsubscribe);
 	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_next, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("get_next_random", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_next_random, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 	ClassDB::bind_method(D_METHOD("get_all", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_all, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 	ClassDB::bind_method(D_METHOD("get_closest", "position", "max_count", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_closest, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 
@@ -83,7 +84,7 @@ void NeighbourhoodServer::_draw() {
 					const Color high(0x08 / 255.0f, 0x30 / 255.0f, 0x6b / 255.0f, 0.5f);
 					Vector2 cell_pos(domain.position.x + cx * grid_size, domain.position.y + cy * grid_size);
 					draw_rect(Rect2(cell_pos, Vector2(grid_size, grid_size)), low.lerp(high, t), true);
-					draw_string(font, cell_pos + Vector2(0, grid_size * 0.5f), String::num_int64(count), HORIZONTAL_ALIGNMENT_CENTER, grid_size, 12, Color(1, 1, 1, 1));
+					draw_string(font, cell_pos + Vector2(0, grid_size * 0.5f), String::num_int64(count), HORIZONTAL_ALIGNMENT_CENTER, grid_size, 24, Color(1, 1, 1, 1));
 				}
 			}
 			std::fill(m_grid_querycount.begin(), m_grid_querycount.end(), 0);
@@ -393,6 +394,14 @@ Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 		return get_next_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 	}
 	return get_next_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+}
+
+Variant NeighbourhoodServer::get_next_random(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+	Array all = get_all(p_position, p_max_distance, p_min_distance, p_layer_mask, p_exclude);
+	if (all.is_empty()) {
+		return Variant();
+	}
+	return all[UtilityFunctions::randi() % all.size()];
 }
 
 Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {

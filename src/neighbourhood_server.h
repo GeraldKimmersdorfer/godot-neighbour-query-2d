@@ -99,6 +99,7 @@ public:
 	void subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data);
 	void unsubscribe(Node2D *p_node);
 	Variant get_next(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
+	Variant get_next_random(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
 	Array get_all(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
 	Array get_closest(const Vector2 &p_position, int p_max_count, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
 
