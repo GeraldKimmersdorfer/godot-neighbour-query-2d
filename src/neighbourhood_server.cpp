@@ -19,6 +19,7 @@ void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourhoodServer::unsubscribe);
 	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_next, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 	ClassDB::bind_method(D_METHOD("get_next_random", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_next_random, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("get_next_first", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_next_first, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 	ClassDB::bind_method(D_METHOD("get_all", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_all, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 	ClassDB::bind_method(D_METHOD("get_closest", "position", "max_count", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_closest, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 
@@ -327,61 +328,57 @@ Variant NeighbourhoodServer::get_next_grid(const Vector2 &p_position, float p_ma
 	const bool check_validity = refresh_intervall != 0.0f;
 	const Subscriber *best = nullptr;
 
-	for (int r = 0;; r++) {
+	auto check = [&](int cx, int cy) {
+		if (!is_cell_in_bounds(cx, cy)) {
+			return;
+		}
+		const int cell_idx = to_cell_index(cx, cy);
+#if DEBUG_INFORMATION
+		m_grid_querycount[cell_idx]++;
+#endif
+		for (const Subscriber &s : m_grid[cell_idx]) {
+			if ((s.layer & p_layer_mask) == 0) {
+				continue;
+			}
+			if (s.node_instance_id == p_exclude_id) {
+				continue;
+			}
+			float d = s.position.distance_squared_to(p_position);
+			if (d >= best_dist_sq || d < min_dist_sq) {
+				continue;
+			}
+			if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+				continue;
+			}
+			best_dist_sq = d;
+			best = &s;
+		}
+	};
+
+	check(cx0, cy0);
+
+	for (int r = 1;; r++) {
 		// Lower bound on world-space distance to any cell in ring r is (r-1)*grid_size.
 		// If that already exceeds best found, no closer result can exist.
 		// In other words: If point is in r we need to check r+1 too since it depends on where
 		// the dot sits inside the cells r whether there can be a better result in r+1
-		if (r > 0) {
-			float min_ring_dist = static_cast<float>((r - 1) * grid_size);
-			if (min_ring_dist * min_ring_dist >= best_dist_sq) {
-				break;
-			}
-		}
-
-		// Also stop if the ring is entirely beyond p_max_distance.
-		if (static_cast<float>(std::max(0, r - 1) * grid_size) > p_max_distance) {
+		float min_ring_dist = static_cast<float>((r - 1) * grid_size);
+		if (min_ring_dist * min_ring_dist >= best_dist_sq) {
 			break;
 		}
 
-		auto check = [&](int cx, int cy) {
-			if (!is_cell_in_bounds(cx, cy)) {
-				return;
-			}
-			const int cell_idx = to_cell_index(cx, cy);
-#if DEBUG_INFORMATION
-			m_grid_querycount[cell_idx]++;
-#endif
-			for (const Subscriber &s : m_grid[cell_idx]) {
-				if ((s.layer & p_layer_mask) == 0) {
-					continue;
-				}
-				if (s.node_instance_id == p_exclude_id) {
-					continue;
-				}
-				float d = s.position.distance_squared_to(p_position);
-				if (d >= best_dist_sq || d < min_dist_sq) {
-					continue;
-				}
-				if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-					continue;
-				}
-				best_dist_sq = d;
-				best = &s;
-			}
-		};
+		// Also stop if the ring is entirely beyond p_max_distance.
+		if (min_ring_dist > p_max_distance) {
+			break;
+		}
 
-		if (r == 0) {
-			check(cx0, cy0);
-		} else {
-			for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
-				check(cx, cy0 - r);
-				check(cx, cy0 + r);
-			}
-			for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
-				check(cx0 - r, cy);
-				check(cx0 + r, cy);
-			}
+		for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
+			check(cx, cy0 - r);
+			check(cx, cy0 + r);
+		}
+		for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
+			check(cx0 - r, cy);
+			check(cx0 + r, cy);
 		}
 	}
 
@@ -402,6 +399,102 @@ Variant NeighbourhoodServer::get_next_random(const Vector2 &p_position, float p_
 		return Variant();
 	}
 	return all[UtilityFunctions::randi() % all.size()];
+}
+
+Variant NeighbourhoodServer::get_next_first_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+	float max_dist_sq = p_max_distance * p_max_distance;
+	float min_dist_sq = p_min_distance * p_min_distance;
+	const bool check_validity = refresh_intervall != 0.0f;
+	for (const auto &[node, s] : m_subscribers) {
+		if ((s.layer & p_layer_mask) == 0) {
+			continue;
+		}
+		if (s.node_instance_id == p_exclude_id) {
+			continue;
+		}
+		float d = s.position.distance_squared_to(p_position);
+		if (d > max_dist_sq || d < min_dist_sq) {
+			continue;
+		}
+		if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+			continue;
+		}
+		return s.data;
+	}
+	return Variant();
+}
+
+Variant NeighbourhoodServer::get_next_first_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+	std::lock_guard<std::mutex> lock(m_grid_mutex);
+
+	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
+	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+
+	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
+	if (p_max_distance > upper_bound) {
+		p_max_distance = upper_bound;
+	}
+
+	float max_dist_sq = p_max_distance * p_max_distance;
+	float min_dist_sq = p_min_distance * p_min_distance;
+	const bool check_validity = refresh_intervall != 0.0f;
+
+	// Returns the first valid subscriber in the cell, or nullptr if none.
+	auto check_cell = [&](int cx, int cy) -> const Subscriber * {
+		if (!is_cell_in_bounds(cx, cy)) {
+			return nullptr;
+		}
+		const int cell_idx = to_cell_index(cx, cy);
+#if DEBUG_INFORMATION
+		m_grid_querycount[cell_idx]++;
+#endif
+		for (const Subscriber &s : m_grid[cell_idx]) {
+			if ((s.layer & p_layer_mask) == 0) {
+				continue;
+			}
+			if (s.node_instance_id == p_exclude_id) {
+				continue;
+			}
+			float d = s.position.distance_squared_to(p_position);
+			if (d > max_dist_sq || d < min_dist_sq) {
+				continue;
+			}
+			if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+				continue;
+			}
+			return &s;
+		}
+		return nullptr;
+	};
+
+	if (const Subscriber *s = check_cell(cx0, cy0)) {
+		return s->data;
+	}
+
+	for (int r = 1;; r++) {
+		if (static_cast<float>((r - 1) * grid_size) > p_max_distance) {
+			break;
+		}
+
+		for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
+			if (const Subscriber *s = check_cell(cx, cy0 - r)) return s->data;
+			if (const Subscriber *s = check_cell(cx, cy0 + r)) return s->data;
+		}
+		for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
+			if (const Subscriber *s = check_cell(cx0 - r, cy)) return s->data;
+			if (const Subscriber *s = check_cell(cx0 + r, cy)) return s->data;
+		}
+	}
+
+	return Variant();
+}
+
+Variant NeighbourhoodServer::get_next_first(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
+	if ((int)m_subscribers.size() < m_brute_force_threshold) {
+		return get_next_first_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+	}
+	return get_next_first_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 }
 
 Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
@@ -518,25 +611,21 @@ Array NeighbourhoodServer::get_closest_grid(const Vector2 &p_position, int p_max
 			}
 		};
 
-		for (int r = 0;; r++) {
-			if (r > 0) {
-				float min_ring_dist = static_cast<float>((r - 1) * grid_size);
-				if (min_ring_dist * min_ring_dist >= max_dist_sq) {
-					break;
-				}
+		check(cx0, cy0);
+
+		for (int r = 1;; r++) {
+			float min_ring_dist = static_cast<float>((r - 1) * grid_size);
+			if (min_ring_dist * min_ring_dist >= max_dist_sq) {
+				break;
 			}
 
-			if (r == 0) {
-				check(cx0, cy0);
-			} else {
-				for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
-					check(cx, cy0 - r);
-					check(cx, cy0 + r);
-				}
-				for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
-					check(cx0 - r, cy);
-					check(cx0 + r, cy);
-				}
+			for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
+				check(cx, cy0 - r);
+				check(cx, cy0 + r);
+			}
+			for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
+				check(cx0 - r, cy);
+				check(cx0 + r, cy);
 			}
 		}
 	}

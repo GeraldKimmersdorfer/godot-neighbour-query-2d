@@ -7,7 +7,7 @@ extends Node2D
 @export var dot_template: PackedScene
 @export var dot_count: int = 1000
 
-enum QueryMode { GET_ALL, GET_NEXT, GET_CLOSEST, GET_NEXT_RANDOM }
+enum QueryMode { GET_ALL, GET_NEXT, GET_CLOSEST, GET_NEXT_RANDOM, GET_NEXT_FIRST }
 
 var _dots: Array[Node2D] = []
 var _highlighted: Array[CanvasItem] = []
@@ -71,6 +71,8 @@ func _input(event: InputEvent) -> void:
 			_mode = QueryMode.GET_CLOSEST
 		elif event.keycode == KEY_4:
 			_mode = QueryMode.GET_NEXT_RANDOM
+		elif event.keycode == KEY_5:
+			_mode = QueryMode.GET_NEXT_FIRST
 	if event is InputEventMouseButton:
 		if event.ctrl_pressed:
 			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -140,12 +142,18 @@ func _physics_process(_delta: float) -> void:
 			if dot:
 				dot.modulate = Color(1.0, 0.0, 0.0)
 				_highlighted.append(dot)
-	else:
+	elif _mode == QueryMode.GET_NEXT_RANDOM:
 		var random = _ns.get_next_random(mouse_pos, _query_max_range, _query_min_range)
 		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
 		if random:
 			random.modulate = Color(1.0, 0.0, 0.0)
 			_highlighted.append(random)
+	else:
+		var first = _ns.get_next_first(mouse_pos, _query_max_range, _query_min_range)
+		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
+		if first:
+			first.modulate = Color(1.0, 0.0, 0.0)
+			_highlighted.append(first)
 
 	queue_redraw()
 
