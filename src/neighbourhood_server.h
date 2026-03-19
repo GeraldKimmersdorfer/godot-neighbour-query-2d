@@ -14,7 +14,7 @@
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector2i.hpp>
 
-#include <mutex>
+#include <limits>
 #include <unordered_map>
 #include <vector>
 
@@ -25,6 +25,7 @@ struct Subscriber {
 	uint64_t node_instance_id = 0;
 	uint32_t layer = 0;
 	Variant data;
+	// NOTE: I tried glm::vec2, also with intrinsics enabled, but no performance gain. godot::Vector2 is fine
 	Vector2 position;
 };
 
@@ -32,11 +33,11 @@ class NeighbourhoodServer : public Node2D {
 	GDCLASS(NeighbourhoodServer, Node2D)
 
 	int grid_size = 128;
-	float refresh_intervall = 0.1f;
+	float refresh_intervall = 0.0f;
 	double m_time_since_refresh = 0.0;
 	Rect2 domain = Rect2(0, 0, 1000, 600);
 	bool draw_domain = true;
-	float draw_queries_refresh_interval = 0.1f;
+	float draw_queries_refresh_interval = 1.0f;
 	// NOTE: get_global_position() accounts for a big portion of refresh time, so we
 	// allow the user to use get_position() instead
 	bool use_global_position = true;
@@ -60,7 +61,6 @@ class NeighbourhoodServer : public Node2D {
 	float m_domain_diagonal_half = 0.0f;
 	std::vector<std::vector<Subscriber>> m_grid;
 	std::vector<std::vector<Subscriber>> m_grid_build;
-	std::mutex m_grid_mutex;
 
 	inline bool is_cell_in_bounds(int cx, int cy) const {
 		return cx >= 0 && cx < m_grid_cols && cy >= 0 && cy < m_grid_rows;
@@ -68,9 +68,14 @@ class NeighbourhoodServer : public Node2D {
 	int to_cell_index(int cx, int cy) const;
 	void _update_grid_dimensions();
 	void refresh();
-	Variant get_next_brute_force(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
-	Array get_all_brute_force(const Vector2 &p_position, float p_max_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
-	Array get_closest_brute_force(const Vector2 &p_position, int p_max_count, float p_max_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Variant get_next_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Variant get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Variant get_next_first_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Variant get_next_first_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Array get_all_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Array get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Array get_closest_brute_force(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Array get_closest_grid(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
 
 #if DEBUG_INFORMATION
 	std::vector<int> m_grid_querycount;
@@ -94,9 +99,11 @@ public:
 
 	void subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data);
 	void unsubscribe(Node2D *p_node);
-	Variant get_next(const Vector2 &p_position, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
-	Array get_all(const Vector2 &p_position, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
-	Array get_closest(const Vector2 &p_position, int p_max_count, float p_max_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
+	Variant get_next(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
+	Variant get_next_random(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
+	Variant get_next_first(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
+	Array get_all(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
+	Array get_closest(const Vector2 &p_position, int p_max_count, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
 
 	void set_grid_size(int p_grid_size);
 	int get_grid_size() const;
