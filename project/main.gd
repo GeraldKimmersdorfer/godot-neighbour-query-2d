@@ -7,12 +7,13 @@ extends Node2D
 @export var dot_template: PackedScene
 @export var dot_count: int = 1000
 
-enum QueryMode { GET_ALL, GET_NEXT, GET_CLOSEST }
+enum QueryMode { GET_ALL, GET_NEXT, GET_CLOSEST, GET_NEXT_RANDOM }
 
 var _dots: Array[Node2D] = []
 var _highlighted: Array[CanvasItem] = []
 var _mode: QueryMode = QueryMode.GET_ALL
-var _query_radius: float = 100.0
+var _query_max_range: float = 100.0
+var _query_min_range: float = 0.0
 var _closest_count: int = 5
 var _debug_info: Dictionary = {}
 
@@ -68,11 +69,19 @@ func _input(event: InputEvent) -> void:
 			_mode = QueryMode.GET_NEXT
 		elif event.keycode == KEY_3:
 			_mode = QueryMode.GET_CLOSEST
+		elif event.keycode == KEY_4:
+			_mode = QueryMode.GET_NEXT_RANDOM
 	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_query_radius = _query_radius + 10.0
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_query_radius = maxf(_query_radius - 10.0, 10.0)
+		if event.ctrl_pressed:
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_query_min_range = minf(_query_min_range + 10.0, _query_max_range)
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				_query_min_range = maxf(_query_min_range - 10.0, 0.0)
+		else:
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_query_max_range = maxf(_query_max_range + 10.0, _query_min_range)
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				_query_max_range = maxf(_query_max_range - 10.0, _query_min_range + 10.0)
 
 func _spawn_dot() -> void:
 	var bounds := _get_bounds()
@@ -110,7 +119,7 @@ func _physics_process(_delta: float) -> void:
 	var t := Time.get_ticks_usec()
 
 	if _mode == QueryMode.GET_ALL:
-		var neighbours := _ns.get_all(mouse_pos, _query_radius)
+		var neighbours := _ns.get_all(mouse_pos, _query_max_range, _query_min_range)
 		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
 		for n in neighbours:
 			var dot = n
@@ -118,24 +127,38 @@ func _physics_process(_delta: float) -> void:
 				dot.modulate = Color(1.0, 0.0, 0.0)
 				_highlighted.append(dot)
 	elif _mode == QueryMode.GET_NEXT:
-		var closest = _ns.get_next(mouse_pos)
+		var closest = _ns.get_next(mouse_pos, _query_max_range, _query_min_range)
 		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
 		if closest:
 			closest.modulate = Color(1.0, 0.0, 0.0)
 			_highlighted.append(closest)
-	else:
-		var neighbours := _ns.get_closest(mouse_pos, _closest_count, _query_radius)
+	elif _mode == QueryMode.GET_CLOSEST:
+		var neighbours := _ns.get_closest(mouse_pos, _closest_count, _query_max_range, _query_min_range)
 		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
 		for n in neighbours:
 			var dot = n
 			if dot:
 				dot.modulate = Color(1.0, 0.0, 0.0)
 				_highlighted.append(dot)
+	else:
+		var random = _ns.get_next_random(mouse_pos, _query_max_range, _query_min_range)
+		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
+		if random:
+			random.modulate = Color(1.0, 0.0, 0.0)
+			_highlighted.append(random)
+
+	queue_redraw()
 
 	if _info_label:
-		var text := "mode: %s\nquery:    %.3f ms (avg)\nradius: %.0f px" % [
-			QueryMode.keys()[_mode], _avgs["query_ms"], _query_radius
+		var text := "mode: %s\nquery:    %.3f ms (avg)\nmax_range: %.0f px\nmin_range: %.0f px" % [
+			QueryMode.keys()[_mode], _avgs["query_ms"], _query_max_range, _query_min_range
 		]
 		for key in _debug_info:
 			text += "\n%s: %.3f" % [key, _debug_info[key]]
 		_info_label.text = text
+
+func _draw() -> void:
+	var mouse_pos := get_global_mouse_position()
+	draw_arc(mouse_pos, _query_max_range, 0.0, TAU, 64, Color(1.0, 1.0, 1.0, 0.6), 1.5)
+	if _query_min_range > 0.0:
+		draw_arc(mouse_pos, _query_min_range, 0.0, TAU, 64, Color(1.0, 1.0, 1.0, 0.3), 1.5)
