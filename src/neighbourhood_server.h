@@ -15,7 +15,6 @@
 #include <godot_cpp/variant/vector2i.hpp>
 
 #include <limits>
-#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -26,6 +25,7 @@ struct Subscriber {
 	uint64_t node_instance_id = 0;
 	uint32_t layer = 0;
 	Variant data;
+	// NOTE: I tried glm::vec2, also with intrinsics enabled, but no performance gain. godot::Vector2 is fine
 	Vector2 position;
 };
 
@@ -61,7 +61,6 @@ class NeighbourhoodServer : public Node2D {
 	float m_domain_diagonal_half = 0.0f;
 	std::vector<std::vector<Subscriber>> m_grid;
 	std::vector<std::vector<Subscriber>> m_grid_build;
-	std::mutex m_grid_mutex;
 
 	inline bool is_cell_in_bounds(int cx, int cy) const {
 		return cx >= 0 && cx < m_grid_cols && cy >= 0 && cy < m_grid_rows;

@@ -162,10 +162,7 @@ void NeighbourhoodServer::_update_grid_dimensions() {
 #if DEBUG_INFORMATION
 	m_grid_querycount.assign(cell_count, 0);
 #endif
-	{
-		std::lock_guard<std::mutex> lock(m_grid_mutex);
-		m_grid.assign(cell_count, {});
-	}
+	m_grid.assign(cell_count, {});
 }
 
 void NeighbourhoodServer::refresh() {
@@ -200,10 +197,7 @@ void NeighbourhoodServer::refresh() {
 		m_subscribers.erase(node);
 	}
 
-	{
-		std::lock_guard<std::mutex> lock(m_grid_mutex);
-		std::swap(m_grid, m_grid_build);
-	}
+	std::swap(m_grid, m_grid_build);
 
 #if DEBUG_INFORMATION
 	double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count();
@@ -311,8 +305,6 @@ Array NeighbourhoodServer::get_closest_brute_force(const Vector2 &p_position, in
 }
 
 Variant NeighbourhoodServer::get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
-	std::lock_guard<std::mutex> lock(m_grid_mutex);
-
 	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
 	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
 
@@ -425,8 +417,6 @@ Variant NeighbourhoodServer::get_next_first_brute_force(const Vector2 &p_positio
 }
 
 Variant NeighbourhoodServer::get_next_first_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
-	std::lock_guard<std::mutex> lock(m_grid_mutex);
-
 	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
 	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
 
@@ -500,8 +490,6 @@ Variant NeighbourhoodServer::get_next_first(const Vector2 &p_position, float p_m
 Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	Array result;
 
-	std::lock_guard<std::mutex> lock(m_grid_mutex);
-
 	// Cap to domain bounds to avoid overflow in cell range computation when p_max_distance is very large.
 	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
 	float range = std::min(p_max_distance, upper_bound);
@@ -560,73 +548,69 @@ Array NeighbourhoodServer::get_closest_grid(const Vector2 &p_position, int p_max
 	std::vector<Entry> heap;
 	heap.reserve(p_max_count + 1);
 
-	{
-		std::lock_guard<std::mutex> lock(m_grid_mutex);
+	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
+	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
 
-		int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
-		int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
+	if (p_max_distance > upper_bound) {
+		p_max_distance = upper_bound;
+	}
+	float max_dist_sq = p_max_distance * p_max_distance;
+	float min_dist_sq = p_min_distance * p_min_distance;
+	const bool check_validity = refresh_intervall != 0.0f;
 
-		float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
-		if (p_max_distance > upper_bound) {
-			p_max_distance = upper_bound;
+	auto check = [&](int cx, int cy) {
+		if (!is_cell_in_bounds(cx, cy)) {
+			return;
 		}
-		float max_dist_sq = p_max_distance * p_max_distance;
-		float min_dist_sq = p_min_distance * p_min_distance;
-		const bool check_validity = refresh_intervall != 0.0f;
-
-		auto check = [&](int cx, int cy) {
-			if (!is_cell_in_bounds(cx, cy)) {
-				return;
-			}
-			const int cell_idx = to_cell_index(cx, cy);
+		const int cell_idx = to_cell_index(cx, cy);
 #if DEBUG_INFORMATION
-			m_grid_querycount[cell_idx]++;
+		m_grid_querycount[cell_idx]++;
 #endif
-			for (const Subscriber &s : m_grid[cell_idx]) {
-				if ((s.layer & p_layer_mask) == 0) {
-					continue;
-				}
-				if (s.node_instance_id == p_exclude_id) {
-					continue;
-				}
-				float d = s.position.distance_squared_to(p_position);
-				if (d > max_dist_sq || d < min_dist_sq) {
-					continue;
-				}
-				if ((int)heap.size() >= p_max_count && d >= heap[0].first) {
-					continue;
-				}
-				if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-					continue;
-				}
-				heap.push_back({ d, s.data });
-				std::push_heap(heap.begin(), heap.end(), cmp);
-				if ((int)heap.size() > p_max_count) {
-					std::pop_heap(heap.begin(), heap.end(), cmp);
-					heap.pop_back();
-				}
-				if ((int)heap.size() == p_max_count) {
-					max_dist_sq = std::min(max_dist_sq, heap[0].first);
-				}
+		for (const Subscriber &s : m_grid[cell_idx]) {
+			if ((s.layer & p_layer_mask) == 0) {
+				continue;
 			}
-		};
+			if (s.node_instance_id == p_exclude_id) {
+				continue;
+			}
+			float d = s.position.distance_squared_to(p_position);
+			if (d > max_dist_sq || d < min_dist_sq) {
+				continue;
+			}
+			if ((int)heap.size() >= p_max_count && d >= heap[0].first) {
+				continue;
+			}
+			if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+				continue;
+			}
+			heap.push_back({ d, s.data });
+			std::push_heap(heap.begin(), heap.end(), cmp);
+			if ((int)heap.size() > p_max_count) {
+				std::pop_heap(heap.begin(), heap.end(), cmp);
+				heap.pop_back();
+			}
+			if ((int)heap.size() == p_max_count) {
+				max_dist_sq = std::min(max_dist_sq, heap[0].first);
+			}
+		}
+	};
 
-		check(cx0, cy0);
+	check(cx0, cy0);
 
-		for (int r = 1;; r++) {
-			float min_ring_dist = static_cast<float>((r - 1) * grid_size);
-			if (min_ring_dist * min_ring_dist >= max_dist_sq) {
-				break;
-			}
+	for (int r = 1;; r++) {
+		float min_ring_dist = static_cast<float>((r - 1) * grid_size);
+		if (min_ring_dist * min_ring_dist >= max_dist_sq) {
+			break;
+		}
 
-			for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
-				check(cx, cy0 - r);
-				check(cx, cy0 + r);
-			}
-			for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
-				check(cx0 - r, cy);
-				check(cx0 + r, cy);
-			}
+		for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
+			check(cx, cy0 - r);
+			check(cx, cy0 + r);
+		}
+		for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
+			check(cx0 - r, cy);
+			check(cx0 + r, cy);
 		}
 	}
 
