@@ -2,6 +2,10 @@
 
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/os.hpp>
+#if DEBUG_INFORMATION
+#include <godot_cpp/classes/font.hpp>
+#include <godot_cpp/classes/theme_db.hpp>
+#endif
 #include <godot_cpp/core/print_string.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
@@ -66,6 +70,7 @@ void NeighbourhoodServer::_draw() {
 			max_count = std::max(max_count, c);
 		}
 		if (max_count > 0) {
+			Ref<Font> font = ThemeDB::get_singleton()->get_fallback_font();
 			for (int cy = 0; cy < m_grid_rows; cy++) {
 				for (int cx = 0; cx < m_grid_cols; cx++) {
 					int count = m_grid_querycount[to_cell_index(cx, cy)];
@@ -74,15 +79,15 @@ void NeighbourhoodServer::_draw() {
 					}
 					float t = static_cast<float>(count) / max_count;
 					// from ColorBrewer: https://colorbrewer2.org/#type=sequential&scheme=Blues&n=9
-					const Color low(0xf7 / 255.0f, 0xfb / 255.0f, 0xff / 255.0f, 0.8f);
-					const Color high(0x08 / 255.0f, 0x30 / 255.0f, 0x6b / 255.0f, 0.8f);
-					draw_rect(Rect2(domain.position.x + cx * grid_size, domain.position.y + cy * grid_size, grid_size, grid_size),
-							low.lerp(high, t), true);
+					const Color low(0xf7 / 255.0f, 0xfb / 255.0f, 0xff / 255.0f, 0.5f);
+					const Color high(0x08 / 255.0f, 0x30 / 255.0f, 0x6b / 255.0f, 0.5f);
+					Vector2 cell_pos(domain.position.x + cx * grid_size, domain.position.y + cy * grid_size);
+					draw_rect(Rect2(cell_pos, Vector2(grid_size, grid_size)), low.lerp(high, t), true);
+					draw_string(font, cell_pos + Vector2(0, grid_size * 0.5f), String::num_int64(count), HORIZONTAL_ALIGNMENT_CENTER, grid_size, 12, Color(1, 1, 1, 1));
 				}
 			}
 			std::fill(m_grid_querycount.begin(), m_grid_querycount.end(), 0);
 		}
-		call_deferred("emit_signal", "debug_info", String("max_querycount"), Variant(max_count));
 	}
 
 #endif
@@ -146,7 +151,11 @@ void NeighbourhoodServer::_update_grid_dimensions() {
 	m_domain_center = domain.position + domain.size * 0.5f;
 	m_domain_diagonal_half = domain.size.length() * 0.5f;
 	int cell_count = m_grid_cols * m_grid_rows;
-	m_brute_force_threshold = cell_count;
+#if DEBUG_INFORMATION
+	m_brute_force_threshold = 1;
+#else
+	m_brute_force_threshold = 50;
+#endif
 	m_grid_build.assign(cell_count, {});
 #if DEBUG_INFORMATION
 	m_grid_querycount.assign(cell_count, 0);
@@ -520,6 +529,7 @@ Array NeighbourhoodServer::get_closest(const Vector2 &p_position, int p_max_coun
 
 #if DEBUG_INFORMATION
 void NeighbourhoodServer::_process(double p_delta) {
+	if (Engine::get_singleton()->is_editor_hint()) return;
 	if (!draw_domain || draw_queries_refresh_interval < 0.0f) {
 		return;
 	}
