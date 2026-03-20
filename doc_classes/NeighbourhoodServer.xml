@@ -6,7 +6,6 @@
 	<description>
 		[NeighbourhoodServer] maintains a uniform spatial grid that is rebuilt at a configurable interval during physics processing. [Node2D] instances register themselves via [method subscribe] and can be queried by world position using [method get_next], [method get_next_first], [method get_next_random], [method get_all], and [method get_closest].
 		Subscribers outside the [member domain] rectangle are ignored and not placed in the grid. The domain can be visualised in the editor and at runtime via [member draw_domain].
-		[b]Validity checks:[/b] When [member refresh_intervall] is [code]0.0[/code] (the default), the grid is rebuilt every physics frame and invalid nodes are discarded during each rebuild. In this mode, query functions skip the validity check since the grid is always up to date -  which makes them noticeably faster.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -109,7 +108,6 @@
 		</member>
 		<member name="refresh_intervall" type="float" setter="set_refresh_intervall" getter="get_refresh_intervall" default="0.0">
 			Minimum time in seconds between grid rebuilds. Set to [code]0.0[/code] (default) to rebuild every physics frame. Higher values reduce CPU cost but queried results may be stale.
-			[b]Note:[/b] When set to [code]0.0[/code], invalid subscribers are discarded on every rebuild so query functions skip the per-result validity check. When set to a positive value, an additional [code]instance_from_id[/code] check is performed per result to guard against freed entries which noticeably slows query functions down.
 		</member>
 		<member name="use_global_position" type="bool" setter="set_use_global_position" getter="get_use_global_position" default="true">
 			When [code]true[/code] (default), subscriber positions are read via [method Node2D.get_global_position]. Set to [code]false[/code] to use [method Node2D.get_position] (local space), which is significantly faster when all subscribers share the same parent and no global transform traversal is needed.
@@ -130,6 +128,10 @@
 			Controls what the heatmap visualises. [constant CELL_READS] shows how many times each grid cell was visited during query traversal. [constant QUERY_COUNTS] shows how many queries originated from within each cell.
 			[b]Warning:[/b] Only available in debug builds!
 		</member>
+		<member name="debug_report_interval" type="float" setter="set_debug_report_interval" getter="get_debug_report_interval" default="1.0">
+			Interval in seconds between emissions of the [signal debug_info] signal carrying the timing report. Set to a negative value to disable periodic reporting entirely.
+			[b]Warning:[/b] This feature is intended for debugging only. Only available in debug builds ([code]DEBUG_INFORMATION[/code]).
+		</member>
 	</members>
 	<signals>
 		<signal name="debug_info">
@@ -137,8 +139,7 @@
 			<param index="1" name="value" type="Variant" />
 			<description>
 				Emitted at various points during processing to expose internal timing and diagnostic data.
-				[param name] may be: [code]main_thread_id[/code], [code]refresh_thread_id[/code], [code]refresh_total_ms[/code].
-				[b]Warning:[/b] Only available in debug builds!
+				[b]Warning:[/b] While the signal is available in all builds most information is only processed in debug builds.
 			</description>
 		</signal>
 	</signals>
