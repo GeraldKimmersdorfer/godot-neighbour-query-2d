@@ -29,16 +29,7 @@ public:
 		const double frame_budget_ms = 1000.0 / m_frame_goal;
 
 		double grand_ms = 0.0;
-		for (const auto &[group, entries] : m_groups)
-			for (const auto &[key, e] : entries)
-				grand_ms += ms(e);
-
-		const double grand_ms_per_frame = safe_div(grand_ms, nframes);
-		const double grand_percent = grand_ms_per_frame / frame_budget_ms * 100.0;
-
 		std::ostringstream oss;
-		oss << "Total: " << std::fixed << std::setprecision(3) << grand_ms_per_frame
-			<< " ms/frame [" << std::setprecision(0) << std::round(grand_percent) << " %]";
 
 		for (const auto &[group, entries] : m_groups) {
 			double group_ms = 0.0;
@@ -48,20 +39,15 @@ public:
 				group_count += e.count;
 			}
 			if (group_count == 0) { continue; }
+			grand_ms += group_ms;
 
 			oss << "\n";
-			if (entries.size() > 1) {
-				oss << "    " << group << ": " << format_entry(group_ms, group_count, nframes);
-				for (const auto &[key, e] : entries)
-					if (e.count > 0)
-						oss << "\n       " << key << ": " << format_entry(ms(e), e.count, nframes);
-			} else {
-				for (const auto &[key, e] : entries)
-					if (e.count > 0)
-						oss << "    " << key << ": " << format_entry(ms(e), e.count, nframes);
-			}
+			oss << "    " << group << ": " << format_entry(group_ms, group_count, nframes, frame_budget_ms);
+			for (const auto &[key, e] : entries)
+				if (e.count > 0)
+					oss << "\n       " << key << ": " << format_entry(ms(e), e.count, nframes);
 		}
-		return oss.str();
+		return "Total: " + format_entry(grand_ms, 0, nframes, frame_budget_ms) + oss.str();
 	}
 
 	// Resets all accumulated values and records the current time as the start of the next interval.
@@ -98,12 +84,18 @@ private:
 		return b > 0.0 ? a / b : 0.0;
 	}
 
-	static std::string format_entry(double total_ms, int count, double number_of_frames) {
+	static std::string format_entry(double total_ms, int count, double number_of_frames, double frame_budget_ms = 0.0) {
 		const double ms_per_frame = safe_div(total_ms, number_of_frames);
 		const double avg_ms = count > 0 ? total_ms / count : 0.0;
 		std::ostringstream oss;
-		oss << std::fixed << std::setprecision(3)
-			<< ms_per_frame << " ms/frame (" << count << " x " << avg_ms << " ms)";
+		oss << std::fixed << std::setprecision(3) << ms_per_frame << " ms/f";
+		if (frame_budget_ms > 0.0) {
+			const double percent = ms_per_frame / frame_budget_ms * 100.0;
+			oss << " [" << std::setprecision(0) << std::round(percent) << " %]";
+		}
+		if (count > 0) {
+			oss << std::fixed << std::setprecision(3) << " (" << count << " x " << avg_ms << " ms)";
+		}
 		return oss.str();
 	}
 };
