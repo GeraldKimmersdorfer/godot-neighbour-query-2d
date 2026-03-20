@@ -3,7 +3,7 @@
 #ifdef DEBUG_ENABLED
 #define DEBUG_INFORMATION 1
 #else
-#define DEBUG_INFORMATION 0
+#define DEBUG_INFORMATION 1
 #endif
 
 #include <godot_cpp/classes/node.hpp>
@@ -87,9 +87,9 @@ private:
 
 #if DEBUG_INFORMATION
 	// CELL_READS: incremented each time a cell is visited during a query
-	std::vector<int> m_grid_querycount;
+	std::vector<int> m_grid_cellreads_debug;
 	// QUERY_COUNTS: incremented once per query call, in the cell that contains the query position
-	std::vector<int> m_grid_querycount_origin;
+	std::vector<int> m_grid_querycount_debug;
 	double m_time_since_querycount_redraw = 0.0;
 #endif
 
@@ -100,11 +100,11 @@ public:
 	NeighbourhoodServer() = default;
 	~NeighbourhoodServer() override = default;
 
-	void _init();
 	void _ready() override;
 	void _physics_process(double p_delta) override;
-	void _draw() override;
+	
 #if DEBUG_INFORMATION
+	void _draw() override;
 	void _process(double p_delta) override;
 #endif
 

@@ -59,9 +59,11 @@ void NeighbourhoodServer::_bind_methods() {
 	ADD_GROUP("", "");
 
 	ADD_SIGNAL(MethodInfo("debug_info",
-			PropertyInfo(Variant::STRING, "name"),
+			PropertyInfo(Variant::STRING_NAME, "name"),
 			PropertyInfo(Variant::NIL, "value", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NIL_IS_VARIANT)));
 }
+
+#if DEBUG_INFORMATION
 
 void NeighbourhoodServer::_draw() {
 	if (!debug_draw_domain) {
@@ -73,9 +75,8 @@ void NeighbourhoodServer::_draw() {
 
 	draw_rect(domain, fill_color, true);
 
-#if DEBUG_INFORMATION
 	{
-		const std::vector<int> &counts = (debug_heatmap_mode == QUERY_COUNTS) ? m_grid_querycount_origin : m_grid_querycount;
+		const std::vector<int> &counts = (debug_heatmap_mode == QUERY_COUNTS) ? m_grid_querycount_debug : m_grid_cellreads_debug;
 		int max_count = 0;
 		for (int c : counts) {
 			max_count = std::max(max_count, c);
@@ -94,14 +95,13 @@ void NeighbourhoodServer::_draw() {
 					const Color high(0x08 / 255.0f, 0x30 / 255.0f, 0x6b / 255.0f, 0.5f);
 					Vector2 cell_pos(domain.position.x + cx * grid_size, domain.position.y + cy * grid_size);
 					draw_rect(Rect2(cell_pos, Vector2(grid_size, grid_size)), low.lerp(high, t), true);
-					draw_string(font, cell_pos + Vector2(0, grid_size * 0.5f), String::num_int64(count), HORIZONTAL_ALIGNMENT_CENTER, grid_size, 24, Color(1, 1, 1, 1));
+					draw_string(font, cell_pos + Vector2(0, grid_size * 0.5f), String::num_int64(count), HORIZONTAL_ALIGNMENT_CENTER, grid_size, 32, Color(1, 1, 1, 1));
 				}
 			}
-			std::fill(m_grid_querycount.begin(), m_grid_querycount.end(), 0);
-			std::fill(m_grid_querycount_origin.begin(), m_grid_querycount_origin.end(), 0);
+			std::fill(m_grid_cellreads_debug.begin(), m_grid_cellreads_debug.end(), 0);
+			std::fill(m_grid_querycount_debug.begin(), m_grid_querycount_debug.end(), 0);
 		}
 	}
-#endif
 
 	draw_rect(domain, border_color, false, 2.0f);
 
@@ -122,21 +122,30 @@ void NeighbourhoodServer::_draw() {
 	}
 }
 
-void NeighbourhoodServer::_init() {
-	_update_grid_dimensions();
-	set_physics_process(true);
-#if DEBUG_INFORMATION
-	set_process(true);
-#endif
+void NeighbourhoodServer::_process(double p_delta) {
+	if (Engine::get_singleton()->is_editor_hint()) return;
+	if (!debug_draw_domain || debug_draw_heatmap_intervall < 0.0f) {
+		return;
+	}
+	m_time_since_querycount_redraw += p_delta;
+	if (m_time_since_querycount_redraw >= debug_draw_heatmap_intervall) {
+		m_time_since_querycount_redraw = 0.0;
+		queue_redraw();
+	}
 }
 
+#endif
+
 void NeighbourhoodServer::_ready() {
+	_update_grid_dimensions();
 	if (Engine::get_singleton()->is_editor_hint()) {
+		set_physics_process(false);
 		queue_redraw();
 	}
 #if DEBUG_INFORMATION
+	set_process(true);
 	// NOTE: Emit deferred such that we see it otherwise _ready runs before main _ready
-	call_deferred("emit_signal", "debug_info", String("main_thread_id"), Variant(OS::get_singleton()->get_thread_caller_id()));
+	call_deferred("emit_signal", "debug_info", StringName("main_thread_id"), Variant(OS::get_singleton()->get_thread_caller_id()));
 #endif
 }
 
@@ -169,15 +178,15 @@ void NeighbourhoodServer::_update_grid_dimensions() {
 #endif
 	m_grid_build.assign(cell_count, {});
 #if DEBUG_INFORMATION
-	m_grid_querycount.assign(cell_count, 0);
-	m_grid_querycount_origin.assign(cell_count, 0);
+	m_grid_cellreads_debug.assign(cell_count, 0);
+	m_grid_querycount_debug.assign(cell_count, 0);
 #endif
 	m_grid.assign(cell_count, {});
 }
 
 void NeighbourhoodServer::refresh() {
 #if DEBUG_INFORMATION
-	emit_signal("debug_info", "refresh_thread_id", OS::get_singleton()->get_thread_caller_id());
+	emit_signal("debug_info", StringName("refresh_thread_id"), OS::get_singleton()->get_thread_caller_id());
 	auto t_start = std::chrono::steady_clock::now();
 #endif
 
@@ -211,7 +220,7 @@ void NeighbourhoodServer::refresh() {
 
 #if DEBUG_INFORMATION
 	double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count();
-	emit_signal("debug_info", "refresh_total_ms", ms);
+	emit_signal("debug_info", StringName("refresh_total_ms"), ms);
 #endif
 }
 
@@ -319,7 +328,7 @@ Variant NeighbourhoodServer::get_next_grid(const Vector2 &p_position, float p_ma
 	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
 #if DEBUG_INFORMATION
 	if (is_cell_in_bounds(cx0, cy0)) {
-		m_grid_querycount_origin[to_cell_index(cx0, cy0)]++;
+		m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 	}
 #endif
 
@@ -341,7 +350,7 @@ Variant NeighbourhoodServer::get_next_grid(const Vector2 &p_position, float p_ma
 		}
 		const int cell_idx = to_cell_index(cx, cy);
 #if DEBUG_INFORMATION
-		m_grid_querycount[cell_idx]++;
+		m_grid_cellreads_debug[cell_idx]++;
 #endif
 		for (const Subscriber &s : m_grid[cell_idx]) {
 			if ((s.layer & p_layer_mask) == 0) {
@@ -436,7 +445,7 @@ Variant NeighbourhoodServer::get_next_first_grid(const Vector2 &p_position, floa
 	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
 #if DEBUG_INFORMATION
 	if (is_cell_in_bounds(cx0, cy0)) {
-		m_grid_querycount_origin[to_cell_index(cx0, cy0)]++;
+		m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 	}
 #endif
 
@@ -456,7 +465,7 @@ Variant NeighbourhoodServer::get_next_first_grid(const Vector2 &p_position, floa
 		}
 		const int cell_idx = to_cell_index(cx, cy);
 #if DEBUG_INFORMATION
-		m_grid_querycount[cell_idx]++;
+		m_grid_cellreads_debug[cell_idx]++;
 #endif
 		for (const Subscriber &s : m_grid[cell_idx]) {
 			if ((s.layer & p_layer_mask) == 0) {
@@ -515,7 +524,7 @@ Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_d
 		int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
 		int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
 		if (is_cell_in_bounds(cx0, cy0)) {
-			m_grid_querycount_origin[to_cell_index(cx0, cy0)]++;
+			m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 		}
 	}
 #endif
@@ -536,7 +545,7 @@ Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_d
 		for (int cx = min_cx; cx <= max_cx; cx++) {
 			const int cell_idx = to_cell_index(cx, cy);
 #if DEBUG_INFORMATION
-			m_grid_querycount[cell_idx]++;
+			m_grid_cellreads_debug[cell_idx]++;
 #endif
 			// NOTE: I already tried having template functions with static ifs to completely remove checks like validity, min distance,
 			// and so on from the hot loop. It did not yield any significant change to the execution time. (same for the other get_ functions)
@@ -582,7 +591,7 @@ Array NeighbourhoodServer::get_closest_grid(const Vector2 &p_position, int p_max
 	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
 #if DEBUG_INFORMATION
 	if (is_cell_in_bounds(cx0, cy0)) {
-		m_grid_querycount_origin[to_cell_index(cx0, cy0)]++;
+		m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 	}
 #endif
 
@@ -600,7 +609,7 @@ Array NeighbourhoodServer::get_closest_grid(const Vector2 &p_position, int p_max
 		}
 		const int cell_idx = to_cell_index(cx, cy);
 #if DEBUG_INFORMATION
-		m_grid_querycount[cell_idx]++;
+		m_grid_cellreads_debug[cell_idx]++;
 #endif
 		for (const Subscriber &s : m_grid[cell_idx]) {
 			if ((s.layer & p_layer_mask) == 0) {
@@ -666,20 +675,6 @@ Array NeighbourhoodServer::get_closest(const Vector2 &p_position, int p_max_coun
 	}
 	return get_closest_grid(p_position, p_max_count, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 }
-
-#if DEBUG_INFORMATION
-void NeighbourhoodServer::_process(double p_delta) {
-	if (Engine::get_singleton()->is_editor_hint()) return;
-	if (!debug_draw_domain || debug_draw_heatmap_intervall < 0.0f) {
-		return;
-	}
-	m_time_since_querycount_redraw += p_delta;
-	if (m_time_since_querycount_redraw >= debug_draw_heatmap_intervall) {
-		m_time_since_querycount_redraw = 0.0;
-		queue_redraw();
-	}
-}
-#endif
 
 void NeighbourhoodServer::set_grid_size(int p_grid_size) {
 	grid_size = p_grid_size;

@@ -54,7 +54,7 @@ func _on_viewport_size_changed() -> void:
 	for dot in _dots:
 		dot.bounds = bounds
 
-func _on_ns_debug_info(key: String, value: Variant) -> void:
+func _on_ns_debug_info(key: StringName, value: Variant) -> void:
 	if key in _avgs:
 		_avgs[key] += _AVG_ALPHA * (float(value) - _avgs[key])
 		_debug_info[key] = _avgs[key]
