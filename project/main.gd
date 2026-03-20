@@ -104,7 +104,7 @@ func _stress_test() -> void:
 		return
 	var idx := randi() % _dots.size()
 	var dot := _dots[idx]
-	# Randomly decide whether to properly unsubscribe or just free (tests validity checks)
+	# Randomly decide whether to properly unsubscribe or just free to test validity checks
 	_remove_dot(dot, randf() > 0.5)
 	_spawn_dot()
 

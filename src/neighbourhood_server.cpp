@@ -255,7 +255,7 @@ void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
 Variant NeighbourhoodServer::get_next_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	float best_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
-	const bool check_validity = refresh_intervall != 0.0f;
+
 	const Subscriber *best = nullptr;
 	for (const auto &[node, s] : m_subscribers) {
 		if ((s.layer & p_layer_mask) == 0) {
@@ -268,7 +268,7 @@ Variant NeighbourhoodServer::get_next_brute_force(const Vector2 &p_position, flo
 		if (d >= best_dist_sq || d < min_dist_sq) {
 			continue;
 		}
-		if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
 			continue;
 		}
 		best_dist_sq = d;
@@ -281,7 +281,7 @@ Array NeighbourhoodServer::get_all_brute_force(const Vector2 &p_position, float 
 	Array result;
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
-	const bool check_validity = refresh_intervall != 0.0f;
+
 	for (const auto &[node, s] : m_subscribers) {
 		if ((s.layer & p_layer_mask) == 0) {
 			continue;
@@ -293,7 +293,7 @@ Array NeighbourhoodServer::get_all_brute_force(const Vector2 &p_position, float 
 		if (d > max_dist_sq || d < min_dist_sq) {
 			continue;
 		}
-		if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
 			continue;
 		}
 		result.push_back(s.data);
@@ -308,7 +308,7 @@ Array NeighbourhoodServer::get_closest_brute_force(const Vector2 &p_position, in
 	heap.reserve(p_max_count + 1);
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
-	const bool check_validity = refresh_intervall != 0.0f;
+
 	for (const auto &[node, s] : m_subscribers) {
 		if ((s.layer & p_layer_mask) == 0) {
 			continue;
@@ -323,7 +323,7 @@ Array NeighbourhoodServer::get_closest_brute_force(const Vector2 &p_position, in
 		if ((int)heap.size() >= p_max_count && d >= heap[0].first) {
 			continue;
 		}
-		if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
 			continue;
 		}
 		heap.push_back({ d, s.data });
@@ -361,7 +361,7 @@ Variant NeighbourhoodServer::get_next_grid(const Vector2 &p_position, float p_ma
 
 	float best_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
-	const bool check_validity = refresh_intervall != 0.0f;
+
 	const Subscriber *best = nullptr;
 
 	auto check = [&](int cx, int cy) {
@@ -383,7 +383,7 @@ Variant NeighbourhoodServer::get_next_grid(const Vector2 &p_position, float p_ma
 			if (d >= best_dist_sq || d < min_dist_sq) {
 				continue;
 			}
-			if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+			if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
 				continue;
 			}
 			best_dist_sq = d;
@@ -453,7 +453,7 @@ Variant NeighbourhoodServer::get_next_random(const Vector2 &p_position, float p_
 Variant NeighbourhoodServer::get_next_first_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
-	const bool check_validity = refresh_intervall != 0.0f;
+
 	for (const auto &[node, s] : m_subscribers) {
 		if ((s.layer & p_layer_mask) == 0) {
 			continue;
@@ -465,7 +465,7 @@ Variant NeighbourhoodServer::get_next_first_brute_force(const Vector2 &p_positio
 		if (d > max_dist_sq || d < min_dist_sq) {
 			continue;
 		}
-		if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
 			continue;
 		}
 		return s.data;
@@ -489,7 +489,7 @@ Variant NeighbourhoodServer::get_next_first_grid(const Vector2 &p_position, floa
 
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
-	const bool check_validity = refresh_intervall != 0.0f;
+
 
 	// Returns the first valid subscriber in the cell, or nullptr if none.
 	auto check_cell = [&](int cx, int cy) -> const Subscriber * {
@@ -511,7 +511,7 @@ Variant NeighbourhoodServer::get_next_first_grid(const Vector2 &p_position, floa
 			if (d > max_dist_sq || d < min_dist_sq) {
 				continue;
 			}
-			if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+			if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
 				continue;
 			}
 			return &s;
@@ -573,7 +573,7 @@ Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_d
 	float range = std::min(p_max_distance, upper_bound);
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
-	const bool check_validity = refresh_intervall != 0.0f;
+
 
 	int min_cx = std::max(0, static_cast<int>(std::floor((p_position.x - range - domain.position.x) / grid_size)));
 	int max_cx = std::min(m_grid_cols - 1, static_cast<int>(std::floor((p_position.x + range - domain.position.x) / grid_size)));
@@ -599,7 +599,7 @@ Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_d
 				if (d > max_dist_sq || d < min_dist_sq) {
 					continue;
 				}
-				if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+				if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
 					continue;
 				}
 				result.push_back(s.data);
@@ -646,7 +646,7 @@ Array NeighbourhoodServer::get_closest_grid(const Vector2 &p_position, int p_max
 	}
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
-	const bool check_validity = refresh_intervall != 0.0f;
+
 
 	auto check = [&](int cx, int cy) {
 		if (!is_cell_in_bounds(cx, cy)) {
@@ -670,7 +670,7 @@ Array NeighbourhoodServer::get_closest_grid(const Vector2 &p_position, int p_max
 			if ((int)heap.size() >= p_max_count && d >= heap[0].first) {
 				continue;
 			}
-			if (check_validity && UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
+			if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
 				continue;
 			}
 			heap.push_back({ d, s.data });
