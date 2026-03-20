@@ -18,6 +18,10 @@
 #include <unordered_map>
 #include <vector>
 
+#if DEBUG_INFORMATION
+#include "debug_timer.h"
+#endif
+
 using namespace godot;
 
 struct Subscriber {
@@ -49,6 +53,7 @@ private:
 	// NOTE: get_global_position() accounts for a big portion of refresh time, so we
 	// allow the user to use get_position() instead
 	bool use_global_position = true;
+	float debug_report_interval = 1.0f;
 
 	// NOTE: We use a function pointer depending on use_global_position such that we
 	// dont have to check use_global_position for each subscriber in each refresh iteration
@@ -91,6 +96,9 @@ private:
 	// QUERY_COUNTS: incremented once per query call, in the cell that contains the query position
 	std::vector<int> m_grid_querycount_debug;
 	double m_time_since_querycount_redraw = 0.0;
+	double m_time_since_debug_report = 0.0;
+	DebugTimer m_debug_timer;
+	void emit_debug_report();
 #endif
 
 protected:
@@ -136,6 +144,9 @@ public:
 
 	void set_debug_heatmap_mode(DebugHeatmapMode p_mode);
 	DebugHeatmapMode get_debug_heatmap_mode() const;
+
+	void set_debug_report_interval(float p_interval);
+	float get_debug_report_interval() const;
 };
 
 VARIANT_ENUM_CAST(NeighbourhoodServer::DebugHeatmapMode);

@@ -44,6 +44,9 @@ void NeighbourhoodServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_debug_heatmap_mode", "mode"), &NeighbourhoodServer::set_debug_heatmap_mode);
 	ClassDB::bind_method(D_METHOD("get_debug_heatmap_mode"), &NeighbourhoodServer::get_debug_heatmap_mode);
 
+	ClassDB::bind_method(D_METHOD("set_debug_report_interval", "interval"), &NeighbourhoodServer::set_debug_report_interval);
+	ClassDB::bind_method(D_METHOD("get_debug_report_interval"), &NeighbourhoodServer::get_debug_report_interval);
+
 	BIND_ENUM_CONSTANT(CELL_READS);
 	BIND_ENUM_CONSTANT(QUERY_COUNTS);
 
@@ -56,6 +59,7 @@ void NeighbourhoodServer::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "debug_draw_domain"), "set_debug_draw_domain", "get_debug_draw_domain");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "debug_draw_heatmap_intervall"), "set_debug_draw_heatmap_intervall", "get_debug_draw_heatmap_intervall");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "debug_heatmap_mode", PROPERTY_HINT_ENUM, "CellReads,QueryCounts"), "set_debug_heatmap_mode", "get_debug_heatmap_mode");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "debug_report_interval"), "set_debug_report_interval", "get_debug_report_interval");
 	ADD_GROUP("", "");
 
 	ADD_SIGNAL(MethodInfo("debug_info",
@@ -123,7 +127,6 @@ void NeighbourhoodServer::_draw() {
 }
 
 void NeighbourhoodServer::_process(double p_delta) {
-	if (Engine::get_singleton()->is_editor_hint()) return;
 	if (!debug_draw_domain || debug_draw_heatmap_intervall < 0.0f) {
 		return;
 	}
@@ -134,25 +137,44 @@ void NeighbourhoodServer::_process(double p_delta) {
 	}
 }
 
+void NeighbourhoodServer::emit_debug_report() {
+	const int frame_goal = Engine::get_singleton()->get_physics_ticks_per_second();
+	m_debug_timer.report_all_and_reset(
+			[this](const std::string &key, const std::string &report) {
+				emit_signal("debug_info", StringName(String(key.c_str()) + "_timing"), String(report.c_str()));
+			},
+			frame_goal, debug_report_interval, "total");
+}
+
 #endif
 
 void NeighbourhoodServer::_ready() {
 	_update_grid_dimensions();
 	if (Engine::get_singleton()->is_editor_hint()) {
 		set_physics_process(false);
-		queue_redraw();
-	}
+		set_process(false);
 #if DEBUG_INFORMATION
-	set_process(true);
-	// NOTE: Emit deferred such that we see it otherwise _ready runs before main _ready
-	call_deferred("emit_signal", "debug_info", StringName("main_thread_id"), Variant(OS::get_singleton()->get_thread_caller_id()));
+		queue_redraw();
 #endif
+	} else {
+		set_physics_process(true);
+#if DEBUG_INFORMATION
+		set_process(true);
+#endif
+	}
 }
 
 void NeighbourhoodServer::_physics_process(double p_delta) {
-	if (Engine::get_singleton()->is_editor_hint()) {
-		return;
+#if DEBUG_INFORMATION
+	if (debug_report_interval >= 0.0f) {
+		m_time_since_debug_report += p_delta;
+		if (m_time_since_debug_report >= debug_report_interval) {
+			m_time_since_debug_report = 0.0;
+			emit_debug_report();
+		}
 	}
+#endif
+
 	m_time_since_refresh += p_delta;
 	if (refresh_intervall > 0.0f && m_time_since_refresh < refresh_intervall) {
 		return;
@@ -186,8 +208,7 @@ void NeighbourhoodServer::_update_grid_dimensions() {
 
 void NeighbourhoodServer::refresh() {
 #if DEBUG_INFORMATION
-	emit_signal("debug_info", StringName("refresh_thread_id"), OS::get_singleton()->get_thread_caller_id());
-	auto t_start = std::chrono::steady_clock::now();
+	m_debug_timer.start("refresh");
 #endif
 
 	// Clear build buffer in-place (keeps per-cell capacity to avoid repeated reallocations).
@@ -219,8 +240,7 @@ void NeighbourhoodServer::refresh() {
 	std::swap(m_grid, m_grid_build);
 
 #if DEBUG_INFORMATION
-	double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count();
-	emit_signal("debug_info", StringName("refresh_total_ms"), ms);
+	m_debug_timer.stop("refresh");
 #endif
 }
 
@@ -402,19 +422,32 @@ Variant NeighbourhoodServer::get_next_grid(const Vector2 &p_position, float p_ma
 }
 
 Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+#if DEBUG_INFORMATION
+	m_debug_timer.start("get_next");
+#endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
-	if ((int)m_subscribers.size() < m_brute_force_threshold) {
-		return get_next_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
-	}
-	return get_next_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+	Variant result = ((int)m_subscribers.size() < m_brute_force_threshold)
+			? get_next_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
+			: get_next_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+#if DEBUG_INFORMATION
+	m_debug_timer.stop("get_next");
+#endif
+	return result;
 }
 
 Variant NeighbourhoodServer::get_next_random(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
-	Array all = get_all(p_position, p_max_distance, p_min_distance, p_layer_mask, p_exclude);
-	if (all.is_empty()) {
-		return Variant();
-	}
-	return all[UtilityFunctions::randi() % all.size()];
+#if DEBUG_INFORMATION
+	m_debug_timer.start("get_next_random");
+#endif
+	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
+	Array all = ((int)m_subscribers.size() < m_brute_force_threshold)
+			? get_all_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
+			: get_all_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+	Variant result = all.is_empty() ? Variant() : all[UtilityFunctions::randi() % all.size()];
+#if DEBUG_INFORMATION
+	m_debug_timer.stop("get_next_random");
+#endif
+	return result;
 }
 
 Variant NeighbourhoodServer::get_next_first_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
@@ -509,11 +542,17 @@ Variant NeighbourhoodServer::get_next_first_grid(const Vector2 &p_position, floa
 }
 
 Variant NeighbourhoodServer::get_next_first(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+#if DEBUG_INFORMATION
+	m_debug_timer.start("get_next_first");
+#endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
-	if ((int)m_subscribers.size() < m_brute_force_threshold) {
-		return get_next_first_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
-	}
-	return get_next_first_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+	Variant result = ((int)m_subscribers.size() < m_brute_force_threshold)
+			? get_next_first_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
+			: get_next_first_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+#if DEBUG_INFORMATION
+	m_debug_timer.stop("get_next_first");
+#endif
+	return result;
 }
 
 Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
@@ -572,11 +611,17 @@ Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_d
 }
 
 Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+#if DEBUG_INFORMATION
+	m_debug_timer.start("get_all");
+#endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
-	if ((int)m_subscribers.size() < m_brute_force_threshold) {
-		return get_all_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
-	}
-	return get_all_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+	Array result = ((int)m_subscribers.size() < m_brute_force_threshold)
+			? get_all_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
+			: get_all_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+#if DEBUG_INFORMATION
+	m_debug_timer.stop("get_all");
+#endif
+	return result;
 }
 
 Array NeighbourhoodServer::get_closest_grid(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
@@ -669,11 +714,17 @@ Array NeighbourhoodServer::get_closest(const Vector2 &p_position, int p_max_coun
 	if (p_max_count <= 0) {
 		return Array();
 	}
+#if DEBUG_INFORMATION
+	m_debug_timer.start("get_closest");
+#endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
-	if ((int)m_subscribers.size() < m_brute_force_threshold) {
-		return get_closest_brute_force(p_position, p_max_count, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
-	}
-	return get_closest_grid(p_position, p_max_count, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+	Array result = ((int)m_subscribers.size() < m_brute_force_threshold)
+			? get_closest_brute_force(p_position, p_max_count, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
+			: get_closest_grid(p_position, p_max_count, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+#if DEBUG_INFORMATION
+	m_debug_timer.stop("get_closest");
+#endif
+	return result;
 }
 
 void NeighbourhoodServer::set_grid_size(int p_grid_size) {
@@ -740,4 +791,12 @@ void NeighbourhoodServer::set_debug_heatmap_mode(DebugHeatmapMode p_mode) {
 
 NeighbourhoodServer::DebugHeatmapMode NeighbourhoodServer::get_debug_heatmap_mode() const {
 	return debug_heatmap_mode;
+}
+
+void NeighbourhoodServer::set_debug_report_interval(float p_interval) {
+	debug_report_interval = p_interval;
+}
+
+float NeighbourhoodServer::get_debug_report_interval() const {
+	return debug_report_interval;
 }
