@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cmath>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -15,6 +16,7 @@ public:
 		m_groups[group][key].t_start = std::chrono::steady_clock::now();
 	}
 
+	// Records elapsed time since start() and increments the call counter.
 	void stop(const std::string &group, const std::string &key) {
 		const auto now = std::chrono::steady_clock::now();
 		auto &e = m_groups[group][key];
@@ -22,48 +24,44 @@ public:
 		e.count++;
 	}
 
-	// Calls callback(key, report) for every entry in the group.
-	// If report_total_line is true, a group-total line is emitted first (keyed by the group name)
-	template <typename F>
-	void report_group(const std::string &group, F &&callback, bool report_total_line) const {
-		const auto it = m_groups.find(group);
-		if (it == m_groups.end()) {
-			return;
-		}
-		const double number_of_frames = m_frame_goal * elapsed_seconds();
-		double group_total_ms = 0.0;
-		int group_count = 0;
-		for (const auto &[key, e] : it->second) {
-			group_total_ms += ms(e);
-			group_count += e.count;
-		}
-		if (report_total_line) {
-			callback(group, format_entry(group_total_ms, group_count, number_of_frames, ""));
-		}
-		const std::string prefix = report_total_line ? "    " : "";
-		for (const auto &[key, e] : it->second) {
-			callback(key, format_entry(ms(e), e.count, number_of_frames, prefix));
-		}
-	}
+	std::string create_report() const {
+		const double nframes = m_frame_goal * elapsed_seconds();
+		const double frame_budget_ms = 1000.0 / m_frame_goal;
 
-	// Emits one callback(key, report) with the sum across ALL groups.
-	// Format: "1.234 ms/frame [12 %]" where % = fraction of the per-frame budget.
-	template <typename F>
-	void report_total(const std::string &key, F &&callback) const {
-		const double number_of_frames = m_frame_goal * elapsed_seconds();
-		const double budget_ms_per_frame = 1000.0 / m_frame_goal;
-		double total_ms = 0.0;
+		double grand_ms = 0.0;
+		for (const auto &[group, entries] : m_groups)
+			for (const auto &[key, e] : entries)
+				grand_ms += ms(e);
+
+		const double grand_ms_per_frame = safe_div(grand_ms, nframes);
+		const double grand_percent = grand_ms_per_frame / frame_budget_ms * 100.0;
+
+		std::ostringstream oss;
+		oss << "Total: " << std::fixed << std::setprecision(3) << grand_ms_per_frame
+			<< " ms/frame [" << std::setprecision(0) << std::round(grand_percent) << " %]";
+
 		for (const auto &[group, entries] : m_groups) {
-			for (const auto &[k, e] : entries) {
-				total_ms += ms(e);
+			double group_ms = 0.0;
+			int group_count = 0;
+			for (const auto &[key, e] : entries) {
+				group_ms += ms(e);
+				group_count += e.count;
+			}
+			if (group_count == 0) { continue; }
+
+			oss << "\n";
+			if (entries.size() > 1) {
+				oss << "    " << group << ": " << format_entry(group_ms, group_count, nframes);
+				for (const auto &[key, e] : entries)
+					if (e.count > 0)
+						oss << "\n       " << key << ": " << format_entry(ms(e), e.count, nframes);
+			} else {
+				for (const auto &[key, e] : entries)
+					if (e.count > 0)
+						oss << "    " << key << ": " << format_entry(ms(e), e.count, nframes);
 			}
 		}
-		const double ms_per_frame = number_of_frames > 0.0 ? total_ms / number_of_frames : 0.0;
-		const double percent = ms_per_frame / budget_ms_per_frame * 100.0;
-		std::ostringstream oss;
-		oss << std::fixed << std::setprecision(3) << ms_per_frame << " ms/frame ["
-			<< std::setprecision(0) << std::round(percent) << " %]";
-		callback(key, oss.str());
+		return oss.str();
 	}
 
 	// Resets all accumulated values and records the current time as the start of the next interval.
@@ -96,11 +94,15 @@ private:
 		return std::chrono::duration<double, std::milli>(e.total).count();
 	}
 
-	static std::string format_entry(double total_ms, int count, double number_of_frames, const std::string &prefix) {
-		const double ms_per_frame = number_of_frames > 0.0 ? total_ms / number_of_frames : 0.0;
+	static double safe_div(double a, double b) {
+		return b > 0.0 ? a / b : 0.0;
+	}
+
+	static std::string format_entry(double total_ms, int count, double number_of_frames) {
+		const double ms_per_frame = safe_div(total_ms, number_of_frames);
 		const double avg_ms = count > 0 ? total_ms / count : 0.0;
 		std::ostringstream oss;
-		oss << prefix << std::fixed << std::setprecision(3)
+		oss << std::fixed << std::setprecision(3)
 			<< ms_per_frame << " ms/frame (" << count << " x " << avg_ms << " ms)";
 		return oss.str();
 	}

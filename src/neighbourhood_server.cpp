@@ -138,12 +138,7 @@ void NeighbourhoodServer::_process(double p_delta) {
 }
 
 void NeighbourhoodServer::emit_debug_report() {
-	auto callback = [this](const std::string &key, const std::string &report) {
-		emit_signal("debug_info", StringName(String(key.c_str()) + "_timing"), String(report.c_str()));
-	};
-	m_debug_timer.report_group("refresh", callback, false);
-	m_debug_timer.report_group("query", callback, true);
-	m_debug_timer.report_total("total", callback);
+	emit_signal("debug_info", StringName("debug_report"), String(m_debug_timer.create_report().c_str()));
 	m_debug_timer.reset_all();
 }
 

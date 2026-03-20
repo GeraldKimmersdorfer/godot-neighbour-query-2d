@@ -130,8 +130,9 @@ func _physics_process(_delta: float) -> void:
 		neighbours = [_ns.get_next_first(mouse_pos, _query_max_range, _query_min_range)]
 	
 	for dot in neighbours:
-		dot.modulate = Color(1.0, 0.0, 0.0)
-		_highlighted.append(dot)
+		if dot:
+			dot.modulate = Color(1.0, 0.0, 0.0)
+			_highlighted.append(dot)
 	
 	queue_redraw()
 
