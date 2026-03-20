@@ -20,9 +20,11 @@ A Godot 4 GDExtension that provides fast 2D spatial queries for nodes in a scene
   Returns up to `max_count` nearest subscribers within range.
 
 
-The grid gets refilled every physics frame by default (`refresh_intervall = 0.0`). When `refresh_intervall` is `0.0`, subscriber validity is hopefully guaranteed by the rebuild itself (invalid nodes are pruned each frame), so the query functions skip the per-result validity check entirely - as this is quite performance heavy. Set `refresh_intervall` to a positive value to throttle rebuilds; in that case query functions perform an additional validity check per result since the grid may be stale.
+The grid gets refilled every physics frame by default (`refresh_intervall = 0.0`). Set `refresh_intervall` to a positive value to throttle rebuilds; query results may be stale in that case.
 
 The domain and grid cell size are adjustable via properties in the editor.
+
+In debug builds the server emits a `debug_info` signal each physics frame with a `debug_report` string containing per-function timings, frame budget percentages, and call counts.
 
 Check the Godot documentation for more details.
 

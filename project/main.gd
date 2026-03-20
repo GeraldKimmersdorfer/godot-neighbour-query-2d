@@ -17,11 +17,6 @@ var _query_min_range: float = 0.0
 var _closest_count: int = 5
 var _debug_info: Dictionary = {}
 
-const _AVG_ALPHA := 0.02 # running average smoothing factor
-var _avgs: Dictionary = {
-	"query_ms": 0.0,
-	"refresh_total_ms": 0.0,
-}
 
 @onready var _ns: NeighbourhoodServer = $NeighbourhoodServer
 
@@ -54,12 +49,15 @@ func _on_viewport_size_changed() -> void:
 	for dot in _dots:
 		dot.bounds = bounds
 
-func _on_ns_debug_info(key: String, value: Variant) -> void:
-	if key in _avgs:
-		_avgs[key] += _AVG_ALPHA * (float(value) - _avgs[key])
-		_debug_info[key] = _avgs[key]
-	else:
-		_debug_info[key] = value
+func _on_ns_debug_info(key: StringName, value: Variant) -> void:
+	_debug_info[key] = value
+	if _info_label:
+		var text := "mode: %s\nmax_range: %.0f px\nmin_range: %.0f px" % [
+			QueryMode.keys()[_mode], _query_max_range, _query_min_range
+		]
+		for k in _debug_info:
+			text += "\n%s: %s" % [k, str(_debug_info[k])]
+		_info_label.text = text
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
@@ -106,7 +104,7 @@ func _stress_test() -> void:
 		return
 	var idx := randi() % _dots.size()
 	var dot := _dots[idx]
-	# Randomly decide whether to properly unsubscribe or just free (tests validity checks)
+	# Randomly decide whether to properly unsubscribe or just free to test validity checks
 	_remove_dot(dot, randf() > 0.5)
 	_spawn_dot()
 
@@ -118,52 +116,25 @@ func _physics_process(_delta: float) -> void:
 	_highlighted.clear()
 
 	var mouse_pos := get_global_mouse_position()
-	var t := Time.get_ticks_usec()
+	var neighbours = []
 
 	if _mode == QueryMode.GET_ALL:
-		var neighbours := _ns.get_all(mouse_pos, _query_max_range, _query_min_range)
-		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
-		for n in neighbours:
-			var dot = n
-			if dot:
-				dot.modulate = Color(1.0, 0.0, 0.0)
-				_highlighted.append(dot)
+		neighbours = _ns.get_all(mouse_pos, _query_max_range, _query_min_range)
 	elif _mode == QueryMode.GET_NEXT:
-		var closest = _ns.get_next(mouse_pos, _query_max_range, _query_min_range)
-		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
-		if closest:
-			closest.modulate = Color(1.0, 0.0, 0.0)
-			_highlighted.append(closest)
+		neighbours = [_ns.get_next(mouse_pos, _query_max_range, _query_min_range)]
 	elif _mode == QueryMode.GET_CLOSEST:
-		var neighbours := _ns.get_closest(mouse_pos, _closest_count, _query_max_range, _query_min_range)
-		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
-		for n in neighbours:
-			var dot = n
-			if dot:
-				dot.modulate = Color(1.0, 0.0, 0.0)
-				_highlighted.append(dot)
+		neighbours = _ns.get_closest(mouse_pos, _closest_count, _query_max_range, _query_min_range)
 	elif _mode == QueryMode.GET_NEXT_RANDOM:
-		var random = _ns.get_next_random(mouse_pos, _query_max_range, _query_min_range)
-		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
-		if random:
-			random.modulate = Color(1.0, 0.0, 0.0)
-			_highlighted.append(random)
+		neighbours = [_ns.get_next_random(mouse_pos, _query_max_range, _query_min_range)]
 	else:
-		var first = _ns.get_next_first(mouse_pos, _query_max_range, _query_min_range)
-		_avgs["query_ms"] += _AVG_ALPHA * (float(Time.get_ticks_usec() - t) / 1000.0 - _avgs["query_ms"])
-		if first:
-			first.modulate = Color(1.0, 0.0, 0.0)
-			_highlighted.append(first)
-
+		neighbours = [_ns.get_next_first(mouse_pos, _query_max_range, _query_min_range)]
+	
+	for dot in neighbours:
+		if dot:
+			dot.modulate = Color(1.0, 0.0, 0.0)
+			_highlighted.append(dot)
+	
 	queue_redraw()
-
-	if _info_label:
-		var text := "mode: %s\nquery:    %.3f ms (avg)\nmax_range: %.0f px\nmin_range: %.0f px" % [
-			QueryMode.keys()[_mode], _avgs["query_ms"], _query_max_range, _query_min_range
-		]
-		for key in _debug_info:
-			text += "\n%s: %.3f" % [key, _debug_info[key]]
-		_info_label.text = text
 
 func _draw() -> void:
 	var mouse_pos := get_global_mouse_position()
