@@ -138,12 +138,13 @@ void NeighbourhoodServer::_process(double p_delta) {
 }
 
 void NeighbourhoodServer::emit_debug_report() {
-	const int frame_goal = Engine::get_singleton()->get_physics_ticks_per_second();
-	m_debug_timer.report_all_and_reset(
-			[this](const std::string &key, const std::string &report) {
-				emit_signal("debug_info", StringName(String(key.c_str()) + "_timing"), String(report.c_str()));
-			},
-			frame_goal, debug_report_interval, "total");
+	auto callback = [this](const std::string &key, const std::string &report) {
+		emit_signal("debug_info", StringName(String(key.c_str()) + "_timing"), String(report.c_str()));
+	};
+	m_debug_timer.report_group("refresh", callback, false);
+	m_debug_timer.report_group("query", callback, true);
+	m_debug_timer.report_total("total", callback);
+	m_debug_timer.reset_all();
 }
 
 #endif
@@ -160,6 +161,7 @@ void NeighbourhoodServer::_ready() {
 		set_physics_process(true);
 #if DEBUG_INFORMATION
 		set_process(true);
+		m_debug_timer = DebugTimer(Engine::get_singleton()->get_physics_ticks_per_second());
 #endif
 	}
 }
@@ -208,7 +210,7 @@ void NeighbourhoodServer::_update_grid_dimensions() {
 
 void NeighbourhoodServer::refresh() {
 #if DEBUG_INFORMATION
-	m_debug_timer.start("refresh");
+	m_debug_timer.start("refresh", "refresh");
 #endif
 
 	// Clear build buffer in-place (keeps per-cell capacity to avoid repeated reallocations).
@@ -240,7 +242,7 @@ void NeighbourhoodServer::refresh() {
 	std::swap(m_grid, m_grid_build);
 
 #if DEBUG_INFORMATION
-	m_debug_timer.stop("refresh");
+	m_debug_timer.stop("refresh", "refresh");
 #endif
 }
 
@@ -423,21 +425,21 @@ Variant NeighbourhoodServer::get_next_grid(const Vector2 &p_position, float p_ma
 
 Variant NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
 #if DEBUG_INFORMATION
-	m_debug_timer.start("get_next");
+	m_debug_timer.start("query", "get_next");
 #endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
 	Variant result = ((int)m_subscribers.size() < m_brute_force_threshold)
 			? get_next_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
 			: get_next_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 #if DEBUG_INFORMATION
-	m_debug_timer.stop("get_next");
+	m_debug_timer.stop("query", "get_next");
 #endif
 	return result;
 }
 
 Variant NeighbourhoodServer::get_next_random(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
 #if DEBUG_INFORMATION
-	m_debug_timer.start("get_next_random");
+	m_debug_timer.start("query", "get_next_random");
 #endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
 	Array all = ((int)m_subscribers.size() < m_brute_force_threshold)
@@ -445,7 +447,7 @@ Variant NeighbourhoodServer::get_next_random(const Vector2 &p_position, float p_
 			: get_all_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 	Variant result = all.is_empty() ? Variant() : all[UtilityFunctions::randi() % all.size()];
 #if DEBUG_INFORMATION
-	m_debug_timer.stop("get_next_random");
+	m_debug_timer.stop("query", "get_next_random");
 #endif
 	return result;
 }
@@ -543,14 +545,14 @@ Variant NeighbourhoodServer::get_next_first_grid(const Vector2 &p_position, floa
 
 Variant NeighbourhoodServer::get_next_first(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
 #if DEBUG_INFORMATION
-	m_debug_timer.start("get_next_first");
+	m_debug_timer.start("query", "get_next_first");
 #endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
 	Variant result = ((int)m_subscribers.size() < m_brute_force_threshold)
 			? get_next_first_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
 			: get_next_first_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 #if DEBUG_INFORMATION
-	m_debug_timer.stop("get_next_first");
+	m_debug_timer.stop("query", "get_next_first");
 #endif
 	return result;
 }
@@ -612,14 +614,14 @@ Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_d
 
 Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
 #if DEBUG_INFORMATION
-	m_debug_timer.start("get_all");
+	m_debug_timer.start("query", "get_all");
 #endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
 	Array result = ((int)m_subscribers.size() < m_brute_force_threshold)
 			? get_all_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
 			: get_all_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 #if DEBUG_INFORMATION
-	m_debug_timer.stop("get_all");
+	m_debug_timer.stop("query", "get_all");
 #endif
 	return result;
 }
@@ -715,14 +717,14 @@ Array NeighbourhoodServer::get_closest(const Vector2 &p_position, int p_max_coun
 		return Array();
 	}
 #if DEBUG_INFORMATION
-	m_debug_timer.start("get_closest");
+	m_debug_timer.start("query", "get_closest");
 #endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
 	Array result = ((int)m_subscribers.size() < m_brute_force_threshold)
 			? get_closest_brute_force(p_position, p_max_count, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
 			: get_closest_grid(p_position, p_max_count, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 #if DEBUG_INFORMATION
-	m_debug_timer.stop("get_closest");
+	m_debug_timer.stop("query", "get_closest");
 #endif
 	return result;
 }
