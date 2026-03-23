@@ -1,4 +1,4 @@
-#include "neighbourhood_server.h"
+#include "neighbour_query_2d.h"
 
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/os.hpp>
@@ -14,38 +14,38 @@
 #include <cmath>
 #include <limits>
 
-void NeighbourhoodServer::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer"), &NeighbourhoodServer::subscribe);
-	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourhoodServer::unsubscribe);
-	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_next, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
-	ClassDB::bind_method(D_METHOD("get_next_random", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_next_random, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
-	ClassDB::bind_method(D_METHOD("get_next_first", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_next_first, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
-	ClassDB::bind_method(D_METHOD("get_all", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_all, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
-	ClassDB::bind_method(D_METHOD("get_closest", "position", "max_count", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourhoodServer::get_closest, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
+void NeighbourQuery2D::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer"), &NeighbourQuery2D::subscribe);
+	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourQuery2D::unsubscribe);
+	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_next, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("get_next_random", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_next_random, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("get_next_first", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_next_first, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("get_all", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_all, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("get_closest", "position", "max_count", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_closest, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 
-	ClassDB::bind_method(D_METHOD("set_grid_size", "grid_size"), &NeighbourhoodServer::set_grid_size);
-	ClassDB::bind_method(D_METHOD("get_grid_size"), &NeighbourhoodServer::get_grid_size);
+	ClassDB::bind_method(D_METHOD("set_grid_size", "grid_size"), &NeighbourQuery2D::set_grid_size);
+	ClassDB::bind_method(D_METHOD("get_grid_size"), &NeighbourQuery2D::get_grid_size);
 
-	ClassDB::bind_method(D_METHOD("set_refresh_intervall", "refresh_intervall"), &NeighbourhoodServer::set_refresh_intervall);
-	ClassDB::bind_method(D_METHOD("get_refresh_intervall"), &NeighbourhoodServer::get_refresh_intervall);
+	ClassDB::bind_method(D_METHOD("set_refresh_intervall", "refresh_intervall"), &NeighbourQuery2D::set_refresh_intervall);
+	ClassDB::bind_method(D_METHOD("get_refresh_intervall"), &NeighbourQuery2D::get_refresh_intervall);
 
-	ClassDB::bind_method(D_METHOD("set_use_global_position", "use_global_position"), &NeighbourhoodServer::set_use_global_position);
-	ClassDB::bind_method(D_METHOD("get_use_global_position"), &NeighbourhoodServer::get_use_global_position);
+	ClassDB::bind_method(D_METHOD("set_use_global_position", "use_global_position"), &NeighbourQuery2D::set_use_global_position);
+	ClassDB::bind_method(D_METHOD("get_use_global_position"), &NeighbourQuery2D::get_use_global_position);
 
-	ClassDB::bind_method(D_METHOD("set_domain", "domain"), &NeighbourhoodServer::set_domain);
-	ClassDB::bind_method(D_METHOD("get_domain"), &NeighbourhoodServer::get_domain);
+	ClassDB::bind_method(D_METHOD("set_domain", "domain"), &NeighbourQuery2D::set_domain);
+	ClassDB::bind_method(D_METHOD("get_domain"), &NeighbourQuery2D::get_domain);
 
-	ClassDB::bind_method(D_METHOD("set_debug_draw_domain", "debug_draw_domain"), &NeighbourhoodServer::set_debug_draw_domain);
-	ClassDB::bind_method(D_METHOD("get_debug_draw_domain"), &NeighbourhoodServer::get_debug_draw_domain);
+	ClassDB::bind_method(D_METHOD("set_debug_draw_domain", "debug_draw_domain"), &NeighbourQuery2D::set_debug_draw_domain);
+	ClassDB::bind_method(D_METHOD("get_debug_draw_domain"), &NeighbourQuery2D::get_debug_draw_domain);
 
-	ClassDB::bind_method(D_METHOD("set_debug_draw_heatmap_intervall", "interval"), &NeighbourhoodServer::set_debug_draw_heatmap_intervall);
-	ClassDB::bind_method(D_METHOD("get_debug_draw_heatmap_intervall"), &NeighbourhoodServer::get_debug_draw_heatmap_intervall);
+	ClassDB::bind_method(D_METHOD("set_debug_draw_heatmap_intervall", "interval"), &NeighbourQuery2D::set_debug_draw_heatmap_intervall);
+	ClassDB::bind_method(D_METHOD("get_debug_draw_heatmap_intervall"), &NeighbourQuery2D::get_debug_draw_heatmap_intervall);
 
-	ClassDB::bind_method(D_METHOD("set_debug_heatmap_mode", "mode"), &NeighbourhoodServer::set_debug_heatmap_mode);
-	ClassDB::bind_method(D_METHOD("get_debug_heatmap_mode"), &NeighbourhoodServer::get_debug_heatmap_mode);
+	ClassDB::bind_method(D_METHOD("set_debug_heatmap_mode", "mode"), &NeighbourQuery2D::set_debug_heatmap_mode);
+	ClassDB::bind_method(D_METHOD("get_debug_heatmap_mode"), &NeighbourQuery2D::get_debug_heatmap_mode);
 
-	ClassDB::bind_method(D_METHOD("set_debug_report_interval", "interval"), &NeighbourhoodServer::set_debug_report_interval);
-	ClassDB::bind_method(D_METHOD("get_debug_report_interval"), &NeighbourhoodServer::get_debug_report_interval);
+	ClassDB::bind_method(D_METHOD("set_debug_report_interval", "interval"), &NeighbourQuery2D::set_debug_report_interval);
+	ClassDB::bind_method(D_METHOD("get_debug_report_interval"), &NeighbourQuery2D::get_debug_report_interval);
 
 	BIND_ENUM_CONSTANT(CELL_READS);
 	BIND_ENUM_CONSTANT(QUERY_COUNTS);
@@ -69,7 +69,7 @@ void NeighbourhoodServer::_bind_methods() {
 
 #if DEBUG_INFORMATION
 
-void NeighbourhoodServer::_draw() {
+void NeighbourQuery2D::_draw() {
 	if (!debug_draw_domain) {
 		return;
 	}
@@ -126,7 +126,7 @@ void NeighbourhoodServer::_draw() {
 	}
 }
 
-void NeighbourhoodServer::_process(double p_delta) {
+void NeighbourQuery2D::_process(double p_delta) {
 	if (!debug_draw_domain || debug_draw_heatmap_intervall < 0.0f) {
 		return;
 	}
@@ -137,14 +137,14 @@ void NeighbourhoodServer::_process(double p_delta) {
 	}
 }
 
-void NeighbourhoodServer::emit_debug_report() {
+void NeighbourQuery2D::emit_debug_report() {
 	emit_signal("debug_info", StringName("debug_report"), String(m_debug_timer.create_report().c_str()));
 	m_debug_timer.reset_all();
 }
 
 #endif
 
-void NeighbourhoodServer::_ready() {
+void NeighbourQuery2D::_ready() {
 	_update_grid_dimensions();
 	if (Engine::get_singleton()->is_editor_hint()) {
 		set_physics_process(false);
@@ -161,7 +161,7 @@ void NeighbourhoodServer::_ready() {
 	}
 }
 
-void NeighbourhoodServer::_physics_process(double p_delta) {
+void NeighbourQuery2D::_physics_process(double p_delta) {
 #if DEBUG_INFORMATION
 	if (debug_report_interval >= 0.0f) {
 		m_time_since_debug_report += p_delta;
@@ -180,11 +180,11 @@ void NeighbourhoodServer::_physics_process(double p_delta) {
 	refresh();
 }
 
-int NeighbourhoodServer::to_cell_index(int cx, int cy) const {
+int NeighbourQuery2D::to_cell_index(int cx, int cy) const {
 	return cy * m_grid_cols + cx;
 }
 
-void NeighbourhoodServer::_update_grid_dimensions() {
+void NeighbourQuery2D::_update_grid_dimensions() {
 	m_grid_cols = std::max(1, static_cast<int>(std::ceil(domain.size.x / grid_size)));
 	m_grid_rows = std::max(1, static_cast<int>(std::ceil(domain.size.y / grid_size)));
 	m_domain_center = domain.position + domain.size * 0.5f;
@@ -203,7 +203,7 @@ void NeighbourhoodServer::_update_grid_dimensions() {
 	m_grid.assign(cell_count, {});
 }
 
-void NeighbourhoodServer::refresh() {
+void NeighbourQuery2D::refresh() {
 #if DEBUG_INFORMATION
 	m_debug_timer.start("refresh", "refresh");
 #endif
@@ -241,15 +241,15 @@ void NeighbourhoodServer::refresh() {
 #endif
 }
 
-void NeighbourhoodServer::subscribe(Node2D *p_node, uint32_t p_layer) {
+void NeighbourQuery2D::subscribe(Node2D *p_node, uint32_t p_layer) {
 	m_subscribers[p_node] = { p_node, static_cast<uint64_t>(p_node->get_instance_id()), p_layer };
 }
 
-void NeighbourhoodServer::unsubscribe(Node2D *p_node) {
+void NeighbourQuery2D::unsubscribe(Node2D *p_node) {
 	m_subscribers.erase(p_node);
 }
 
-Node2D *NeighbourhoodServer::get_next_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+Node2D *NeighbourQuery2D::get_next_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	float best_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
@@ -274,7 +274,7 @@ Node2D *NeighbourhoodServer::get_next_brute_force(const Vector2 &p_position, flo
 	return best ? best->node : nullptr;
 }
 
-Array NeighbourhoodServer::get_all_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+Array NeighbourQuery2D::get_all_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	Array result;
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
@@ -298,7 +298,7 @@ Array NeighbourhoodServer::get_all_brute_force(const Vector2 &p_position, float 
 	return result;
 }
 
-Array NeighbourhoodServer::get_closest_brute_force(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+Array NeighbourQuery2D::get_closest_brute_force(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	using Entry = std::pair<float, Node2D *>;
 	auto cmp = [](const Entry &a, const Entry &b) { return a.first < b.first; };
 	std::vector<Entry> heap;
@@ -340,7 +340,7 @@ Array NeighbourhoodServer::get_closest_brute_force(const Vector2 &p_position, in
 	return result;
 }
 
-Node2D *NeighbourhoodServer::get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
 	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
 #if DEBUG_INFORMATION
@@ -418,7 +418,7 @@ Node2D *NeighbourhoodServer::get_next_grid(const Vector2 &p_position, float p_ma
 	return best ? best->node : nullptr;
 }
 
-Node2D *NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+Node2D *NeighbourQuery2D::get_next(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
 #if DEBUG_INFORMATION
 	m_debug_timer.start("query", "get_next");
 #endif
@@ -432,7 +432,7 @@ Node2D *NeighbourhoodServer::get_next(const Vector2 &p_position, float p_max_dis
 	return result;
 }
 
-Node2D *NeighbourhoodServer::get_next_random(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+Node2D *NeighbourQuery2D::get_next_random(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
 #if DEBUG_INFORMATION
 	m_debug_timer.start("query", "get_next_random");
 #endif
@@ -447,7 +447,7 @@ Node2D *NeighbourhoodServer::get_next_random(const Vector2 &p_position, float p_
 	return result;
 }
 
-Node2D *NeighbourhoodServer::get_next_first_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+Node2D *NeighbourQuery2D::get_next_first_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
@@ -470,7 +470,7 @@ Node2D *NeighbourhoodServer::get_next_first_brute_force(const Vector2 &p_positio
 	return nullptr;
 }
 
-Node2D *NeighbourhoodServer::get_next_first_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
 	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
 #if DEBUG_INFORMATION
@@ -538,7 +538,7 @@ Node2D *NeighbourhoodServer::get_next_first_grid(const Vector2 &p_position, floa
 	return nullptr;
 }
 
-Node2D *NeighbourhoodServer::get_next_first(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+Node2D *NeighbourQuery2D::get_next_first(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
 #if DEBUG_INFORMATION
 	m_debug_timer.start("query", "get_next_first");
 #endif
@@ -552,7 +552,7 @@ Node2D *NeighbourhoodServer::get_next_first(const Vector2 &p_position, float p_m
 	return result;
 }
 
-Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	Array result;
 
 #if DEBUG_INFORMATION
@@ -607,7 +607,7 @@ Array NeighbourhoodServer::get_all_grid(const Vector2 &p_position, float p_max_d
 	return result;
 }
 
-Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+Array NeighbourQuery2D::get_all(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
 #if DEBUG_INFORMATION
 	m_debug_timer.start("query", "get_all");
 #endif
@@ -621,7 +621,7 @@ Array NeighbourhoodServer::get_all(const Vector2 &p_position, float p_max_distan
 	return result;
 }
 
-Array NeighbourhoodServer::get_closest_grid(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+Array NeighbourQuery2D::get_closest_grid(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	// NOTE: We use a maxheap keyed by squared distance such that heap[0] is always the farthest collected entry.
 	// Using a heap here allows us O(logn) for insert whereas a sorted array would be O(n).
 	using Entry = std::pair<float, Node2D *>;
@@ -707,7 +707,7 @@ Array NeighbourhoodServer::get_closest_grid(const Vector2 &p_position, int p_max
 	return result;
 }
 
-Array NeighbourhoodServer::get_closest(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+Array NeighbourQuery2D::get_closest(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
 	if (p_max_count <= 0) {
 		return Array();
 	}
@@ -724,7 +724,7 @@ Array NeighbourhoodServer::get_closest(const Vector2 &p_position, int p_max_coun
 	return result;
 }
 
-void NeighbourhoodServer::set_grid_size(int p_grid_size) {
+void NeighbourQuery2D::set_grid_size(int p_grid_size) {
 	grid_size = p_grid_size;
 	_update_grid_dimensions();
 	if (Engine::get_singleton()->is_editor_hint()) {
@@ -732,28 +732,28 @@ void NeighbourhoodServer::set_grid_size(int p_grid_size) {
 	}
 }
 
-int NeighbourhoodServer::get_grid_size() const {
+int NeighbourQuery2D::get_grid_size() const {
 	return grid_size;
 }
 
-void NeighbourhoodServer::set_refresh_intervall(float p_refresh_intervall) {
+void NeighbourQuery2D::set_refresh_intervall(float p_refresh_intervall) {
 	refresh_intervall = p_refresh_intervall;
 }
 
-float NeighbourhoodServer::get_refresh_intervall() const {
+float NeighbourQuery2D::get_refresh_intervall() const {
 	return refresh_intervall;
 }
 
-void NeighbourhoodServer::set_use_global_position(bool p_use_global_position) {
+void NeighbourQuery2D::set_use_global_position(bool p_use_global_position) {
 	use_global_position = p_use_global_position;
 	m_get_position = use_global_position ? &Node2D::get_global_position : &Node2D::get_position;
 }
 
-bool NeighbourhoodServer::get_use_global_position() const {
+bool NeighbourQuery2D::get_use_global_position() const {
 	return use_global_position;
 }
 
-void NeighbourhoodServer::set_domain(const Rect2 &p_domain) {
+void NeighbourQuery2D::set_domain(const Rect2 &p_domain) {
 	domain = p_domain;
 	_update_grid_dimensions();
 	if (Engine::get_singleton()->is_editor_hint()) {
@@ -761,39 +761,39 @@ void NeighbourhoodServer::set_domain(const Rect2 &p_domain) {
 	}
 }
 
-Rect2 NeighbourhoodServer::get_domain() const {
+Rect2 NeighbourQuery2D::get_domain() const {
 	return domain;
 }
 
-void NeighbourhoodServer::set_debug_draw_domain(bool p_debug_draw_domain) {
+void NeighbourQuery2D::set_debug_draw_domain(bool p_debug_draw_domain) {
 	debug_draw_domain = p_debug_draw_domain;
 	queue_redraw();
 }
 
-bool NeighbourhoodServer::get_debug_draw_domain() const {
+bool NeighbourQuery2D::get_debug_draw_domain() const {
 	return debug_draw_domain;
 }
 
-void NeighbourhoodServer::set_debug_draw_heatmap_intervall(float p_interval) {
+void NeighbourQuery2D::set_debug_draw_heatmap_intervall(float p_interval) {
 	debug_draw_heatmap_intervall = p_interval;
 }
 
-float NeighbourhoodServer::get_debug_draw_heatmap_intervall() const {
+float NeighbourQuery2D::get_debug_draw_heatmap_intervall() const {
 	return debug_draw_heatmap_intervall;
 }
 
-void NeighbourhoodServer::set_debug_heatmap_mode(DebugHeatmapMode p_mode) {
+void NeighbourQuery2D::set_debug_heatmap_mode(DebugHeatmapMode p_mode) {
 	debug_heatmap_mode = p_mode;
 }
 
-NeighbourhoodServer::DebugHeatmapMode NeighbourhoodServer::get_debug_heatmap_mode() const {
+NeighbourQuery2D::DebugHeatmapMode NeighbourQuery2D::get_debug_heatmap_mode() const {
 	return debug_heatmap_mode;
 }
 
-void NeighbourhoodServer::set_debug_report_interval(float p_interval) {
+void NeighbourQuery2D::set_debug_report_interval(float p_interval) {
 	debug_report_interval = p_interval;
 }
 
-float NeighbourhoodServer::get_debug_report_interval() const {
+float NeighbourQuery2D::get_debug_report_interval() const {
 	return debug_report_interval;
 }

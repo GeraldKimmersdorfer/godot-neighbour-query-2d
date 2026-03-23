@@ -5,7 +5,7 @@ import sys
 from methods import print_error
 
 
-libname = "neighbourhood-server"
+libname = "neighbour-query-2d"
 projectdir = "project"
 
 localEnv = Environment(tools=["default"], PLATFORM="")

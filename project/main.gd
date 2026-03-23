@@ -18,7 +18,7 @@ var _closest_count: int = 5
 var _debug_info: Dictionary = {}
 
 
-@onready var _ns: NeighbourhoodServer = $NeighbourhoodServer
+@onready var _ns: NeighbourQuery2D = $NeighbourQuery2D
 
 func _ready() -> void:
 	if _ns.has_signal("debug_info"):

@@ -38,8 +38,8 @@ struct Subscriber {
 	Vector2 position;
 };
 
-class NeighbourhoodServer : public Node2D {
-	GDCLASS(NeighbourhoodServer, Node2D)
+class NeighbourQuery2D : public Node2D {
+	GDCLASS(NeighbourQuery2D, Node2D)
 
 public:
 	enum DebugHeatmapMode {
@@ -110,8 +110,8 @@ protected:
 	static void _bind_methods();
 
 public:
-	NeighbourhoodServer() = default;
-	~NeighbourhoodServer() override = default;
+	NeighbourQuery2D() = default;
+	~NeighbourQuery2D() override = default;
 
 	void _ready() override;
 	void _physics_process(double p_delta) override;
@@ -154,4 +154,4 @@ public:
 	float get_debug_report_interval() const;
 };
 
-VARIANT_ENUM_CAST(NeighbourhoodServer::DebugHeatmapMode);
+VARIANT_ENUM_CAST(NeighbourQuery2D::DebugHeatmapMode);

@@ -14,7 +14,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="Godot Neighbourhood Server"
+config/name="NeighbourQuery2D Example"
 run/main_scene="uid://didpfqa11i68r"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"

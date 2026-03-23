@@ -113,11 +113,11 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v6
         with:
-          name: neighbourhood-server-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.float-precision }}-${{ matrix.target-type }}
+          name: neighbour-query-2d-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.float-precision }}-${{ matrix.target-type }}
           path: |
             ${{ github.workspace }}/bin/**
 
-  # Merges all the build artifacts together into a single neighbourhood-server artifact.
+  # Merges all the build artifacts together into a single neighbour-query-2d artifact.
   # If you comment out this step, all the builds will be uploaded individually.
   merge:
     runs-on: ubuntu-22.04
@@ -126,6 +126,6 @@ jobs:
       - name: Merge Artifacts
         uses: actions/upload-artifact/merge@v4
         with:
-          name: neighbourhood-server
-          pattern: neighbourhood-server-*
+          name: neighbour-query-2d
+          pattern: neighbour-query-2d-*
           delete-merged: true

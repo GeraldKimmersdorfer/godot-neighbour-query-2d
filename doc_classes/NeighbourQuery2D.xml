@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="NeighbourhoodServer" inherits="Node2D" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+<class name="NeighbourQuery2D" inherits="Node2D" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
 		Node that provides fast spatial neighbourhood queries over subscribed [Node2D] instances.
 	</brief_description>
 	<description>
-		[NeighbourhoodServer] maintains a uniform spatial grid that is rebuilt at a configurable interval during physics processing. [Node2D] instances register themselves via [method subscribe] and can be queried by world position using [method get_next], [method get_next_first], [method get_next_random], [method get_all], and [method get_closest].
+		[NeighbourQuery2D] maintains a uniform spatial grid that is rebuilt at a configurable interval during physics processing. [Node2D] instances register themselves via [method subscribe] and can be queried by world position using [method get_next], [method get_next_first], [method get_next_random], [method get_all], and [method get_closest].
 		Subscribers outside the [member domain] rectangle are ignored and not placed in the grid. The domain can be visualised in the editor and at runtime via [member draw_domain].
 	</description>
 	<tutorials>
@@ -123,7 +123,7 @@
 			[b]Warning:[/b] This feature is intended for debugging only. Frequent redraws at low intervals are very expensive at scale and will noticeably impact performance.
 			[b]Warning:[/b] Heatmap data is only collected in debug builds ([code]DEBUG_INFORMATION[/code]). The property exists in all builds but has no visual effect in release.
 		</member>
-		<member name="debug_heatmap_mode" type="int" setter="set_debug_heatmap_mode" getter="get_debug_heatmap_mode" enum="NeighbourhoodServer.DebugHeatmapMode" default="0">
+		<member name="debug_heatmap_mode" type="int" setter="set_debug_heatmap_mode" getter="get_debug_heatmap_mode" enum="NeighbourQuery2D.DebugHeatmapMode" default="0">
 			Controls what the heatmap visualises. [constant CELL_READS] shows how many times each grid cell was visited during query traversal. [constant QUERY_COUNTS] shows how many queries originated from within each cell.
 			[b]Warning:[/b] Only available in debug builds!
 		</member>
