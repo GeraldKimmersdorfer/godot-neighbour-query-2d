@@ -1,4 +1,6 @@
-# NeighbourhoodServer
+# <img src="project/icon.svg" width="40" height="40" align="left" style="margin-right:8px"/> NeighbourQuery2D
+
+![Version](https://img.shields.io/badge/version-6-blue) [![Godot 4.6](https://img.shields.io/badge/Godot-4.6-blue?logo=godotengine&logoColor=white)](https://godotengine.org/) ![License](https://img.shields.io/github/license/GeraldKimmersdorfer/godot-neighbour-query-2d)
 
 A Godot 4 GDExtension that provides fast 2D spatial queries for nodes in a scene. It maintains a uniform grid refilled on the physics tick (at adjustable time intervals). It lets you efficiently find nodes nearby.
 
@@ -6,7 +8,7 @@ A Godot 4 GDExtension that provides fast 2D spatial queries for nodes in a scene
 
 ## What it does
 
-`NeighbourhoodServer` is a Node2D you add to your scene. Other nodes register themselves as **subscribers**. You can then query by world position:
+`NeighbourQuery2D` is a Node2D you add to your scene. Other nodes register themselves as **subscribers**. You can then query by world position:
 
 - `get_next(position, max_distance, min_distance, layer_mask, exclude)`
   Returns the nearest subscriber within range.
@@ -24,7 +26,7 @@ The grid gets refilled every physics frame by default (`refresh_intervall = 0.0`
 
 The domain and grid cell size are adjustable via properties in the editor.
 
-In debug builds the server emits a `debug_info` signal each physics frame with a `debug_report` string containing per-function timings, frame budget percentages, and call counts.
+In debug builds the node emits a `debug_info` signal each physics frame with a `debug_report` string containing per-function timings, frame budget percentages, and call counts.
 
 Check the Godot documentation for more details.
 
@@ -35,7 +37,7 @@ Check the Godot documentation for more details.
 **Clone with submodules:**
 
 ```shell
-git clone --recurse-submodules https://github.com/your-org/godot-neighbourhood-server.git
+git clone --recurse-submodules https://github.com/GeraldKimmersdorfer/godot-neighbour-query-2d.git
 ```
 
 Or if you already cloned without submodules:

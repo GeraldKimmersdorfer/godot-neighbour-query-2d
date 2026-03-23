@@ -1,40 +1,103 @@
 # For syntax, see https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
 # This workflow is triggered manually on the "Actions" tab on GitHub, and can be used to create releases.
 
-name: Compile Neighbourhood-Server for all platforms
+name: Compile NeighbourQuery2D for all platforms
 on:
   workflow_dispatch:
+    inputs:
+      linux_x86_64:
+        description: 'Linux x86_64'
+        type: boolean
+        default: true
+      linux_arm64:
+        description: 'Linux arm64'
+        type: boolean
+        default: false
+      windows_x86_64:
+        description: 'Windows x86_64'
+        type: boolean
+        default: true
+      macos_universal:
+        description: 'macOS universal'
+        type: boolean
+        default: false
+      android_arm64:
+        description: 'Android arm64'
+        type: boolean
+        default: false
+      web_wasm32:
+        description: 'Web wasm32'
+        type: boolean
+        default: false
+      target_type:
+        description: 'Build type'
+        type: choice
+        options:
+          - both
+          - template_debug
+          - template_release
+        default: both
+      float_precision:
+        description: 'Float precision'
+        type: choice
+        options:
+          - single
+          - double
+          - both
+        default: single
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  setup:
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - name: Generate matrix
+        id: generate
+        env:
+          IN_LINUX_X86_64:   ${{ inputs.linux_x86_64 }}
+          IN_LINUX_ARM64:    ${{ inputs.linux_arm64 }}
+          IN_WINDOWS_X86_64: ${{ inputs.windows_x86_64 }}
+          IN_MACOS_UNIVERSAL: ${{ inputs.macos_universal }}
+          IN_ANDROID_ARM64:  ${{ inputs.android_arm64 }}
+          IN_WEB_WASM32:     ${{ inputs.web_wasm32 }}
+          IN_TARGET_TYPE:    ${{ inputs.target_type }}
+          IN_FLOAT_PRECISION: ${{ inputs.float_precision }}
+        run: |
+          python3 << 'EOF'
+          import json, os
+
+          def env(key):
+              return os.environ[key]
+
+          targets = []
+          if env('IN_LINUX_X86_64')    == 'true': targets.append({"platform": "linux",   "arch": "x86_64",   "os": "ubuntu-22.04"})
+          if env('IN_LINUX_ARM64')     == 'true': targets.append({"platform": "linux",   "arch": "arm64",    "os": "ubuntu-22.04-arm"})
+          if env('IN_WINDOWS_X86_64')  == 'true': targets.append({"platform": "windows", "arch": "x86_64",   "os": "windows-latest"})
+          if env('IN_MACOS_UNIVERSAL') == 'true': targets.append({"platform": "macos",   "arch": "universal","os": "macos-latest"})
+          if env('IN_ANDROID_ARM64')   == 'true': targets.append({"platform": "android", "arch": "arm64",    "os": "ubuntu-22.04"})
+          if env('IN_WEB_WASM32')      == 'true': targets.append({"platform": "web",     "arch": "wasm32",   "os": "ubuntu-22.04"})
+
+          tt = env('IN_TARGET_TYPE')
+          target_types = ['template_debug', 'template_release'] if tt == 'both' else [tt]
+
+          fp = env('IN_FLOAT_PRECISION')
+          precisions = ['single', 'double'] if fp == 'both' else [fp]
+
+          matrix = {"target": targets, "target-type": target_types, "float-precision": precisions}
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"matrix={json.dumps(matrix)}\n")
+          EOF
+
   build:
+    needs: setup
     strategy:
       fail-fast: false
-      matrix:
-        # A build is made for every possible combination of parameters
-        # You can add or remove entries from the arrays of each parameter to customize which builds you want to run.
-        # See https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow
-        target:
-          [
-            { platform: linux, arch: x86_64, os: ubuntu-22.04 },
-            #{ platform: linux, arch: x86_32, os: ubuntu-22.04 },
-            #{ platform: linux, arch: arm64, os: ubuntu-22.04-arm },
-            #{ platform: linux, arch: arm32, os: ubuntu-22.04-arm },
-            { platform: windows, arch: x86_64, os: windows-latest },
-            #{ platform: windows, arch: x86_32, os: windows-latest },
-            #{ platform: windows, arch: arm64, os: windows-latest },
-            #{ platform: macos, arch: universal, os: macos-latest },
-            #{ platform: android, arch: x86_64, os: ubuntu-22.04 },
-            #{ platform: android, arch: x86_32, os: ubuntu-22.04 },
-            #{ platform: android, arch: arm64, os: ubuntu-22.04 },
-            #{ platform: android, arch: arm32, os: ubuntu-22.04 },
-            #{ platform: ios, arch: arm64, os: macos-latest },
-            #{ platform: web, arch: wasm32, os: ubuntu-22.04 },
-          ]
-        target-type: [template_debug, template_release]
-        float-precision: [single]
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     runs-on: ${{ matrix.target.os }}
 
@@ -52,7 +115,7 @@ jobs:
         shell: bash
         run: |
           echo "commit=$(git -C godot-cpp rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          
+
       # Setup Python for SCons
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -102,22 +165,15 @@ jobs:
             arch=${{ matrix.target.arch }} \
             precision=${{ matrix.float-precision }}
 
-      # Clean up compilation files
-      - name: Windows - Delete compilation files
-        if: ${{ matrix.target.platform == 'windows' }}
-        shell: pwsh
-        run: |
-          Remove-Item bin/* -Include *.exp,*.lib,*.pdb -Force
-
       # Upload the build
       - name: Upload Artifact
         uses: actions/upload-artifact@v6
         with:
-          name: neighbourhood-server-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.float-precision }}-${{ matrix.target-type }}
+          name: neighbour-query-2d-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.float-precision }}-${{ matrix.target-type }}
           path: |
             ${{ github.workspace }}/bin/**
 
-  # Merges all the build artifacts together into a single neighbourhood-server artifact.
+  # Merges all the build artifacts together into a single neighbour-query-2d artifact.
   # If you comment out this step, all the builds will be uploaded individually.
   merge:
     runs-on: ubuntu-22.04
@@ -126,6 +182,6 @@ jobs:
       - name: Merge Artifacts
         uses: actions/upload-artifact/merge@v4
         with:
-          name: neighbourhood-server
-          pattern: neighbourhood-server-*
+          name: neighbour-query-2d
+          pattern: neighbour-query-2d-*
           delete-merged: true

@@ -10,13 +10,15 @@ expand_margin_top = 10.0
 expand_margin_right = 10.0
 expand_margin_bottom = 10.0
 
-[node name="Main" type="Node2D" unique_id=608581577 node_paths=PackedStringArray("_info_label")]
+[node name="Main" type="Node2D" unique_id=608581577 node_paths=PackedStringArray("_info_label", "_nq2d")]
 script = ExtResource("1_ig7tw")
 _info_label = NodePath("DebugInfoLabel")
+_nq2d = NodePath("NeighbourQuery2D")
 dot_template = ExtResource("2_0xm2m")
 dot_count = 5000
 
 [node name="DebugInfoLabel" type="Label" parent="." unique_id=524208133]
+visible = false
 z_index = 1
 offset_right = 81.0
 offset_bottom = 23.0
@@ -24,7 +26,7 @@ size_flags_vertical = 0
 theme_override_styles/normal = SubResource("StyleBoxFlat_h2yge")
 text = "DebugInfo"
 
-[node name="NeighbourhoodServer" type="NeighbourhoodServer" parent="." unique_id=588930159]
+[node name="NeighbourQuery2D" type="NeighbourQuery2D" parent="." unique_id=1303969294]
 grid_size = 64
 use_global_position = false
 domain = Rect2(0, 0, 1400, 900)

@@ -24,17 +24,22 @@
 
 using namespace godot;
 
+// NOTE: I already tried returning a gdscript object with multiple parameters like squared distance,
+// position, node reference such that we don't have to do certain calculations on gd script side.
+// BUT instanzing those objects comes with too much overhead such that the get_all function was four
+// times slower.
+
 struct Subscriber {
+	Node2D *node = nullptr;
 	// We need to store the node_id for validity check (is_instance_valid does not exists in gdextension)
 	uint64_t node_instance_id = 0;
 	uint32_t layer = 0;
-	Variant data;
 	// NOTE: I already tried glm::vec2, also with intrinsics enabled, but no performance gain. godot::Vector2 is fine
 	Vector2 position;
 };
 
-class NeighbourhoodServer : public Node2D {
-	GDCLASS(NeighbourhoodServer, Node2D)
+class NeighbourQuery2D : public Node2D {
+	GDCLASS(NeighbourQuery2D, Node2D)
 
 public:
 	enum DebugHeatmapMode {
@@ -81,10 +86,10 @@ private:
 	int to_cell_index(int cx, int cy) const;
 	void _update_grid_dimensions();
 	void refresh();
-	Variant get_next_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
-	Variant get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
-	Variant get_next_first_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
-	Variant get_next_first_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Node2D *get_next_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Node2D *get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Node2D *get_next_first_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
+	Node2D *get_next_first_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
 	Array get_all_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
 	Array get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
 	Array get_closest_brute_force(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
@@ -105,8 +110,8 @@ protected:
 	static void _bind_methods();
 
 public:
-	NeighbourhoodServer() = default;
-	~NeighbourhoodServer() override = default;
+	NeighbourQuery2D() = default;
+	~NeighbourQuery2D() override = default;
 
 	void _ready() override;
 	void _physics_process(double p_delta) override;
@@ -116,11 +121,11 @@ public:
 	void _process(double p_delta) override;
 #endif
 
-	void subscribe(Node2D *p_node, uint32_t p_layer, const Variant &p_data);
+	void subscribe(Node2D *p_node, uint32_t p_layer);
 	void unsubscribe(Node2D *p_node);
-	Variant get_next(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
-	Variant get_next_random(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
-	Variant get_next_first(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
+	Node2D *get_next(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
+	Node2D *get_next_random(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
+	Node2D *get_next_first(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
 	Array get_all(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
 	Array get_closest(const Vector2 &p_position, int p_max_count, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
 
@@ -149,4 +154,4 @@ public:
 	float get_debug_report_interval() const;
 };
 
-VARIANT_ENUM_CAST(NeighbourhoodServer::DebugHeatmapMode);
+VARIANT_ENUM_CAST(NeighbourQuery2D::DebugHeatmapMode);

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="NeighbourhoodServer" inherits="Node2D" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+<class name="NeighbourQuery2D" inherits="Node2D" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
 		Node that provides fast spatial neighbourhood queries over subscribed [Node2D] instances.
 	</brief_description>
 	<description>
-		[NeighbourhoodServer] maintains a uniform spatial grid that is rebuilt at a configurable interval during physics processing. [Node2D] instances register themselves via [method subscribe] and can be queried by world position using [method get_next], [method get_next_first], [method get_next_random], [method get_all], and [method get_closest].
+		[NeighbourQuery2D] maintains a uniform spatial grid that is rebuilt at a configurable interval during physics processing. [Node2D] instances register themselves via [method subscribe] and can be queried by world position using [method get_next], [method get_next_first], [method get_next_random], [method get_all], and [method get_closest].
 		Subscribers outside the [member domain] rectangle are ignored and not placed in the grid. The domain can be visualised in the editor and at runtime via [member draw_domain].
 	</description>
 	<tutorials>
@@ -14,9 +14,8 @@
 			<return type="void" />
 			<param index="0" name="node" type="Node2D" />
 			<param index="1" name="layer" type="int" />
-			<param index="2" name="data" type="Variant" />
 			<description>
-				Registers [param node] with a collision [param layer] bitmask and an arbitrary [param data] payload. If [param node] is already subscribed its entry is overwritten.
+				Registers [param node] with a collision [param layer] bitmask. If [param node] is already subscribed its entry is overwritten.
 			</description>
 		</method>
 		<method name="unsubscribe">
@@ -27,41 +26,41 @@
 			</description>
 		</method>
 		<method name="get_next">
-			<return type="Variant" />
+			<return type="Node2D" />
 			<param index="0" name="position" type="Vector2" />
 			<param index="1" name="max_distance" type="float" default="1.7976931348623157e+308" />
 			<param index="2" name="min_distance" type="float" default="0.0" />
 			<param index="3" name="layer_mask" type="int" default="4294967295" />
 			<param index="4" name="exclude" type="Node2D" default="null" />
 			<description>
-				Returns the data payload of the nearest subscriber to [param position] whose layer matches [param layer_mask]. Returns [code]null[/code] if no match is found.
+				Returns the nearest subscribed [Node2D] to [param position] whose layer matches [param layer_mask]. Returns [code]null[/code] if no match is found.
 				[param max_distance] limits the search radius in world units. [param min_distance] excludes subscribers closer than this value.
 				[param exclude] optionally skips a specific subscriber.
 			</description>
 		</method>
 		<method name="get_next_first">
-			<return type="Variant" />
+			<return type="Node2D" />
 			<param index="0" name="position" type="Vector2" />
 			<param index="1" name="max_distance" type="float" default="1.7976931348623157e+308" />
 			<param index="2" name="min_distance" type="float" default="0.0" />
 			<param index="3" name="layer_mask" type="int" default="4294967295" />
 			<param index="4" name="exclude" type="Node2D" default="null" />
 			<description>
-				Returns the data payload of the first subscriber found within range of [param position] whose layer matches [param layer_mask]. Returns [code]null[/code] if no match is found.
-				This is the fastest query function: it expands outward cell by cell and returns immediately on the first valid hit, without scanning for the closest result. The returned subscriber is not guaranteed to be the nearest one.
+				Returns the first subscribed [Node2D] found within range of [param position] whose layer matches [param layer_mask]. Returns [code]null[/code] if no match is found.
+				This is the fastest query function: it expands outward cell by cell and returns immediately on the first valid hit, without scanning for the closest result. The returned node is not guaranteed to be the nearest one.
 				[param max_distance] limits the search radius in world units. [param min_distance] excludes subscribers closer than this value.
 				[param exclude] optionally skips a specific subscriber.
 			</description>
 		</method>
 		<method name="get_next_random">
-			<return type="Variant" />
+			<return type="Node2D" />
 			<param index="0" name="position" type="Vector2" />
 			<param index="1" name="max_distance" type="float" default="1.7976931348623157e+308" />
 			<param index="2" name="min_distance" type="float" default="0.0" />
 			<param index="3" name="layer_mask" type="int" default="4294967295" />
 			<param index="4" name="exclude" type="Node2D" default="null" />
 			<description>
-				Returns the data payload of a random subscriber within range of [param position] whose layer matches [param layer_mask]. Returns [code]null[/code] if no match is found.
+				Returns a random subscribed [Node2D] within range of [param position] whose layer matches [param layer_mask]. Returns [code]null[/code] if no match is found.
 				[param max_distance] limits the search radius in world units. [param min_distance] excludes subscribers closer than this value.
 				[param exclude] optionally skips a specific subscriber.
 			</description>
@@ -74,7 +73,7 @@
 			<param index="3" name="layer_mask" type="int" default="4294967295" />
 			<param index="4" name="exclude" type="Node2D" default="null" />
 			<description>
-				Returns an [Array] of data payloads for all subscribers within [param max_distance] of [param position] whose layer matches [param layer_mask].
+				Returns an [Array] of [Node2D] references for all subscribers within [param max_distance] of [param position] whose layer matches [param layer_mask].
 				[param min_distance] excludes subscribers closer than this value.
 				[param exclude] optionally skips a specific subscriber.
 			</description>
@@ -88,7 +87,7 @@
 			<param index="4" name="layer_mask" type="int" default="4294967295" />
 			<param index="5" name="exclude" type="Node2D" default="null" />
 			<description>
-				Returns an [Array] of up to [param max_count] data payloads for the nearest subscribers to [param position] whose layer matches [param layer_mask]. The array is not sorted by distance.
+				Returns an [Array] of up to [param max_count] [Node2D] references for the nearest subscribers to [param position] whose layer matches [param layer_mask]. The array is not sorted by distance.
 				[param max_distance] limits the search radius in world units. [param min_distance] excludes subscribers closer than this value.
 				[param exclude] optionally skips a specific subscriber.
 			</description>
@@ -124,7 +123,7 @@
 			[b]Warning:[/b] This feature is intended for debugging only. Frequent redraws at low intervals are very expensive at scale and will noticeably impact performance.
 			[b]Warning:[/b] Heatmap data is only collected in debug builds ([code]DEBUG_INFORMATION[/code]). The property exists in all builds but has no visual effect in release.
 		</member>
-		<member name="debug_heatmap_mode" type="int" setter="set_debug_heatmap_mode" getter="get_debug_heatmap_mode" enum="NeighbourhoodServer.DebugHeatmapMode" default="0">
+		<member name="debug_heatmap_mode" type="int" setter="set_debug_heatmap_mode" getter="get_debug_heatmap_mode" enum="NeighbourQuery2D.DebugHeatmapMode" default="0">
 			Controls what the heatmap visualises. [constant CELL_READS] shows how many times each grid cell was visited during query traversal. [constant QUERY_COUNTS] shows how many queries originated from within each cell.
 			[b]Warning:[/b] Only available in debug builds!
 		</member>

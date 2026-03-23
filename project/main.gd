@@ -2,6 +2,7 @@ extends Node2D
 
 @export_group("Scene Controls")
 @export var _info_label: Label
+@export var _nq2d: NeighbourQuery2D
 
 @export_group("")
 @export var dot_template: PackedScene
@@ -12,17 +13,13 @@ enum QueryMode { GET_ALL, GET_NEXT, GET_CLOSEST, GET_NEXT_RANDOM, GET_NEXT_FIRST
 var _dots: Array[Node2D] = []
 var _highlighted: Array[CanvasItem] = []
 var _mode: QueryMode = QueryMode.GET_ALL
-var _query_max_range: float = 100.0
-var _query_min_range: float = 0.0
+var _query_max_range: float = 150.0
+var _query_min_range: float = 70.0
 var _closest_count: int = 5
 var _debug_info: Dictionary = {}
 
-
-@onready var _ns: NeighbourhoodServer = $NeighbourhoodServer
-
 func _ready() -> void:
-	if _ns.has_signal("debug_info"):
-		_ns.debug_info.connect(_on_ns_debug_info)
+	_nq2d.debug_info.connect(_on_ns_debug_info)
 	get_viewport().size_changed.connect(_on_viewport_size_changed)
 	var bounds := _get_bounds()
 	for i in dot_count:
@@ -31,14 +28,14 @@ func _ready() -> void:
 		dot.bounds = bounds
 		add_child(dot)
 		_dots.append(dot)
-		_ns.subscribe(dot, 1, dot)
+		_nq2d.subscribe(dot, 1)
 
 func _exit_tree() -> void:
 	for dot in _dots:
-		_ns.unsubscribe(dot)
+		_nq2d.unsubscribe(dot)
 
 func _get_bounds() -> Rect2:
-	var gs := float(_ns.grid_size)
+	var gs := float(_nq2d.grid_size)
 	var viewport_size := get_viewport_rect().size
 	# Snap to the last fully visible cell boundary, then pad by one cell on each side
 	var snapped_size := Vector2(floor(viewport_size.x / gs) * gs, floor(viewport_size.y / gs) * gs)
@@ -58,6 +55,7 @@ func _on_ns_debug_info(key: StringName, value: Variant) -> void:
 		for k in _debug_info:
 			text += "\n%s: %s" % [k, str(_debug_info[k])]
 		_info_label.text = text
+		_info_label.visible = true
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
@@ -90,13 +88,13 @@ func _spawn_dot() -> void:
 	dot.bounds = bounds
 	add_child(dot)
 	_dots.append(dot)
-	_ns.subscribe(dot, 1, dot)
+	_nq2d.subscribe(dot, 1)
 
 func _remove_dot(dot: Node2D, call_unsubscribe: bool) -> void:
 	_dots.erase(dot)
 	_highlighted.erase(dot)
 	if call_unsubscribe:
-		_ns.unsubscribe(dot)
+		_nq2d.unsubscribe(dot)
 	dot.queue_free()
 
 func _stress_test() -> void:
@@ -119,15 +117,15 @@ func _physics_process(_delta: float) -> void:
 	var neighbours = []
 
 	if _mode == QueryMode.GET_ALL:
-		neighbours = _ns.get_all(mouse_pos, _query_max_range, _query_min_range)
+		neighbours = _nq2d.get_all(mouse_pos, _query_max_range, _query_min_range)
 	elif _mode == QueryMode.GET_NEXT:
-		neighbours = [_ns.get_next(mouse_pos, _query_max_range, _query_min_range)]
+		neighbours = [_nq2d.get_next(mouse_pos, _query_max_range, _query_min_range)]
 	elif _mode == QueryMode.GET_CLOSEST:
-		neighbours = _ns.get_closest(mouse_pos, _closest_count, _query_max_range, _query_min_range)
+		neighbours = _nq2d.get_closest(mouse_pos, _closest_count, _query_max_range, _query_min_range)
 	elif _mode == QueryMode.GET_NEXT_RANDOM:
-		neighbours = [_ns.get_next_random(mouse_pos, _query_max_range, _query_min_range)]
+		neighbours = [_nq2d.get_next_random(mouse_pos, _query_max_range, _query_min_range)]
 	else:
-		neighbours = [_ns.get_next_first(mouse_pos, _query_max_range, _query_min_range)]
+		neighbours = [_nq2d.get_next_first(mouse_pos, _query_max_range, _query_min_range)]
 	
 	for dot in neighbours:
 		if dot:

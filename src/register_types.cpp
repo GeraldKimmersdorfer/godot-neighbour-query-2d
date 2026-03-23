@@ -5,7 +5,7 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 
-#include "neighbourhood_server.h"
+#include "neighbour_query_2d.h"
 
 using namespace godot;
 
@@ -14,7 +14,7 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
-	GDREGISTER_CLASS(NeighbourhoodServer);
+	GDREGISTER_CLASS(NeighbourQuery2D);
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
@@ -22,7 +22,7 @@ void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
 
 extern "C"
 {
-	GDExtensionBool GDE_EXPORT neighbourhood_server_init(GDExtensionInterfaceGetProcAddress p_get_proc_address, GDExtensionClassLibraryPtr p_library, GDExtensionInitialization *r_initialization)
+	GDExtensionBool GDE_EXPORT neighbour_query_2d_init(GDExtensionInterfaceGetProcAddress p_get_proc_address, GDExtensionClassLibraryPtr p_library, GDExtensionInitialization *r_initialization)
 	{
 		GDExtensionBinding::InitObject init_obj(p_get_proc_address, p_library, r_initialization);
 		init_obj.register_initializer(initialize_gdextension_types);
