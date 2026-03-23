@@ -2,21 +2,8 @@
 *.gen.*
 .godot/
 
-# Ignore library files but not the gdextension file
-project/bin/*
-!project/bin/android
-project/bin/android/*
-!project/bin/android/.gitkeep
-!project/bin/linux
-project/bin/linux/*
-!project/bin/linux/.gitkeep
-!project/bin/macos
-project/bin/macos/*
-!project/bin/macos/.gitkeep
-!project/bin/windows
-project/bin/windows/*
-!project/bin/windows/.gitkeep
-!project/bin/*.gdextension
+# project/bin/ is filled entirely by the build scripts
+project/bin/
 .sconsign*.dblite
 
 # Ignore custom.py
@@ -57,8 +44,14 @@ compile_commands.json
 # Jetbrains
 .idea/
 
-# Build output
-bin/
+# Root bin/ — ignore compiled platform output, track gdextension and icons
+/bin/android/
+/bin/ios/
+/bin/linux/
+/bin/macos/
+/bin/web/
+/bin/windows/
+/bin/*.uid
 
 # Cmake
 cmake-build*

@@ -4,6 +4,9 @@ entry_symbol = "neighbour_query_2d_init"
 compatibility_minimum = "4.6"
 reloadable = true
 
+[icons]
+NeighbourQuery2D = "./NeighbourQuery2D.svg"
+
 [libraries]
 ; Relative paths ensure that our GDExtension can be placed anywhere in the project directory.
 macos.single.debug = "./macos/libneighbour-query-2d.macos.template_debug.dylib"

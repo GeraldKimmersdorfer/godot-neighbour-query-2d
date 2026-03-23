@@ -1,5 +1,7 @@
 #!/usr/bin/env python
+import glob
 import os
+import shutil
 import sys
 
 from methods import print_error
@@ -58,7 +60,11 @@ library = env.SharedLibrary(
     source=sources,
 )
 
-copy = env.Install("{}/bin/{}/".format(projectdir, env["platform"]), library)
+def post_build(target, source, env):
+    for ext in ['*.exp', '*.lib', '*.pdb']:
+        for f in glob.glob(os.path.join('bin', '**', ext), recursive=True):
+            os.remove(f)
+    shutil.copytree('bin', os.path.join(projectdir, 'bin'), dirs_exist_ok=True)
 
-default_args = [library, copy]
-Default(*default_args)
+env.AddPostAction(library, post_build)
+Default(library)

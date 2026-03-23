@@ -76,8 +76,21 @@ set_target_properties(${LIBNAME}
     OUTPUT_NAME "${LIBNAME}${GODOTCPP_SUFFIX}"
 )
 
-set(GODOT_PROJECT_BINARY_DIR "${PROJECT_SOURCE_DIR}/${GODOT_PROJECT_DIR}/bin/${GODOTCPP_PLATFORM}")
+# Remove MSVC linker artifacts
+if(MSVC)
+    add_custom_command(TARGET ${LIBNAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rm -f
+            "$<TARGET_FILE_DIR:${LIBNAME}>/$<TARGET_FILE_BASE_NAME:${LIBNAME}>.exp"
+            "$<TARGET_FILE_DIR:${LIBNAME}>/$<TARGET_FILE_BASE_NAME:${LIBNAME}>.lib"
+            "$<TARGET_FILE_DIR:${LIBNAME}>/$<TARGET_FILE_BASE_NAME:${LIBNAME}>.pdb"
+        VERBATIM
+    )
+endif()
 
+# Copy entire bin/ into the Godot project
 add_custom_command(TARGET ${LIBNAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${LIBNAME}>" "${GODOT_PROJECT_BINARY_DIR}/$<TARGET_FILE_NAME:${LIBNAME}>"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${PROJECT_SOURCE_DIR}/bin"
+        "${PROJECT_SOURCE_DIR}/${GODOT_PROJECT_DIR}/bin"
+    VERBATIM
 )
