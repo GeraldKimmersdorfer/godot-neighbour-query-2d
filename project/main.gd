@@ -31,7 +31,7 @@ func _ready() -> void:
 		dot.bounds = bounds
 		add_child(dot)
 		_dots.append(dot)
-		_ns.subscribe(dot, 1, dot)
+		_ns.subscribe(dot, 1)
 
 func _exit_tree() -> void:
 	for dot in _dots:
@@ -90,7 +90,7 @@ func _spawn_dot() -> void:
 	dot.bounds = bounds
 	add_child(dot)
 	_dots.append(dot)
-	_ns.subscribe(dot, 1, dot)
+	_ns.subscribe(dot, 1)
 
 func _remove_dot(dot: Node2D, call_unsubscribe: bool) -> void:
 	_dots.erase(dot)
