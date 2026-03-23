@@ -13,15 +13,16 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <random>
 
 void NeighbourQuery2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer"), &NeighbourQuery2D::subscribe);
 	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourQuery2D::unsubscribe);
 	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_next, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
-	ClassDB::bind_method(D_METHOD("get_next_random", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_next_random, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 	ClassDB::bind_method(D_METHOD("get_next_first", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_next_first, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 	ClassDB::bind_method(D_METHOD("get_all", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_all, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 	ClassDB::bind_method(D_METHOD("get_closest", "position", "max_count", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_closest, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("get_random", "position", "max_count", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_random, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 
 	ClassDB::bind_method(D_METHOD("set_grid_size", "grid_size"), &NeighbourQuery2D::set_grid_size);
 	ClassDB::bind_method(D_METHOD("get_grid_size"), &NeighbourQuery2D::get_grid_size);
@@ -190,11 +191,6 @@ void NeighbourQuery2D::_update_grid_dimensions() {
 	m_domain_center = domain.position + domain.size * 0.5f;
 	m_domain_diagonal_half = domain.size.length() * 0.5f;
 	int cell_count = m_grid_cols * m_grid_rows;
-#if DEBUG_INFORMATION
-	m_brute_force_threshold = 1;
-#else
-	m_brute_force_threshold = 50;
-#endif
 	m_grid_build.assign(cell_count, {});
 #if DEBUG_INFORMATION
 	m_grid_cellreads_debug.assign(cell_count, 0);
@@ -247,97 +243,6 @@ void NeighbourQuery2D::subscribe(Node2D *p_node, uint32_t p_layer) {
 
 void NeighbourQuery2D::unsubscribe(Node2D *p_node) {
 	m_subscribers.erase(p_node);
-}
-
-Node2D *NeighbourQuery2D::get_next_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
-	float best_dist_sq = p_max_distance * p_max_distance;
-	float min_dist_sq = p_min_distance * p_min_distance;
-
-	const Subscriber *best = nullptr;
-	for (const auto &[node, s] : m_subscribers) {
-		if ((s.layer & p_layer_mask) == 0) {
-			continue;
-		}
-		if (s.node_instance_id == p_exclude_id) {
-			continue;
-		}
-		float d = s.position.distance_squared_to(p_position);
-		if (d >= best_dist_sq || d < min_dist_sq) {
-			continue;
-		}
-		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-			continue;
-		}
-		best_dist_sq = d;
-		best = &s;
-	}
-	return best ? best->node : nullptr;
-}
-
-Array NeighbourQuery2D::get_all_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
-	Array result;
-	float max_dist_sq = p_max_distance * p_max_distance;
-	float min_dist_sq = p_min_distance * p_min_distance;
-
-	for (const auto &[node, s] : m_subscribers) {
-		if ((s.layer & p_layer_mask) == 0) {
-			continue;
-		}
-		if (s.node_instance_id == p_exclude_id) {
-			continue;
-		}
-		float d = s.position.distance_squared_to(p_position);
-		if (d > max_dist_sq || d < min_dist_sq) {
-			continue;
-		}
-		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-			continue;
-		}
-		result.push_back(s.node);
-	}
-	return result;
-}
-
-Array NeighbourQuery2D::get_closest_brute_force(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
-	using Entry = std::pair<float, Node2D *>;
-	auto cmp = [](const Entry &a, const Entry &b) { return a.first < b.first; };
-	std::vector<Entry> heap;
-	heap.reserve(p_max_count + 1);
-	float max_dist_sq = p_max_distance * p_max_distance;
-	float min_dist_sq = p_min_distance * p_min_distance;
-
-	for (const auto &[node, s] : m_subscribers) {
-		if ((s.layer & p_layer_mask) == 0) {
-			continue;
-		}
-		if (s.node_instance_id == p_exclude_id) {
-			continue;
-		}
-		float d = s.position.distance_squared_to(p_position);
-		if (d > max_dist_sq || d < min_dist_sq) {
-			continue;
-		}
-		if ((int)heap.size() >= p_max_count && d >= heap[0].first) {
-			continue;
-		}
-		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-			continue;
-		}
-		heap.push_back({ d, s.node });
-		std::push_heap(heap.begin(), heap.end(), cmp);
-		if ((int)heap.size() > p_max_count) {
-			std::pop_heap(heap.begin(), heap.end(), cmp);
-			heap.pop_back();
-		}
-		if ((int)heap.size() == p_max_count) {
-			max_dist_sq = std::min(max_dist_sq, heap[0].first);
-		}
-	}
-	Array result;
-	for (const auto &[d, node] : heap) {
-		result.push_back(node);
-	}
-	return result;
 }
 
 Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
@@ -423,52 +328,89 @@ Node2D *NeighbourQuery2D::get_next(const Vector2 &p_position, float p_max_distan
 	m_debug_timer.start("query", "get_next");
 #endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
-	Node2D *result = ((int)m_subscribers.size() < m_brute_force_threshold)
-			? get_next_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
-			: get_next_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+	Node2D *result = get_next_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 #if DEBUG_INFORMATION
 	m_debug_timer.stop("query", "get_next");
 #endif
 	return result;
 }
 
-Node2D *NeighbourQuery2D::get_next_random(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 #if DEBUG_INFORMATION
-	m_debug_timer.start("query", "get_next_random");
+	{
+		int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
+		int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+		if (is_cell_in_bounds(cx0, cy0)) {
+			m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
+		}
+	}
+#endif
+
+	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
+	float range = std::min(p_max_distance, upper_bound);
+	float max_dist_sq = p_max_distance * p_max_distance;
+	float min_dist_sq = p_min_distance * p_min_distance;
+
+	int min_cx = std::max(0, static_cast<int>(std::floor((p_position.x - range - domain.position.x) / grid_size)));
+	int max_cx = std::min(m_grid_cols - 1, static_cast<int>(std::floor((p_position.x + range - domain.position.x) / grid_size)));
+	int min_cy = std::max(0, static_cast<int>(std::floor((p_position.y - range - domain.position.y) / grid_size)));
+	int max_cy = std::min(m_grid_rows - 1, static_cast<int>(std::floor((p_position.y + range - domain.position.y) / grid_size)));
+
+	std::vector<const Subscriber *> candidates;
+	for (int cy = min_cy; cy <= max_cy; cy++) {
+		for (int cx = min_cx; cx <= max_cx; cx++) {
+			const int cell_idx = to_cell_index(cx, cy);
+#if DEBUG_INFORMATION
+			m_grid_cellreads_debug[cell_idx]++;
+#endif
+			for (const Subscriber &s : m_grid[cell_idx]) {
+				if ((s.layer & p_layer_mask) == 0) {
+					continue;
+				}
+				if (s.node_instance_id == p_exclude_id) {
+					continue;
+				}
+				float d = s.position.distance_squared_to(p_position);
+				if (d > max_dist_sq || d < min_dist_sq) {
+					continue;
+				}
+				candidates.push_back(&s);
+			}
+		}
+	}
+
+	//NOTE: Partial Fisher-Yates method since we dont have to completely shuffle the candidates
+	// pick a random element from the remaining unprocessed pool, verify it and shrink the pool
+	thread_local static std::default_random_engine rng(std::random_device{}());
+	int remaining = (int)candidates.size();
+	Array result;
+	while (remaining > 0 && (int)result.size() < p_max_count) {
+		int idx = rng() % remaining;
+		const Subscriber *s = candidates[idx];
+		candidates[idx] = candidates[--remaining];
+		if (UtilityFunctions::instance_from_id(s->node_instance_id) == nullptr) {
+			continue;
+		}
+		result.push_back(s->node);
+	}
+	return result;
+}
+
+Array NeighbourQuery2D::get_random(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, Node2D *p_exclude) {
+	if (p_max_count <= 0) {
+		return Array();
+	}
+#if DEBUG_INFORMATION
+	m_debug_timer.start("query", "get_random");
 #endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
-	Array all = ((int)m_subscribers.size() < m_brute_force_threshold)
-			? get_all_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
-			: get_all_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
-	Node2D *result = all.is_empty() ? nullptr : Object::cast_to<Node2D>(all[UtilityFunctions::randi() % all.size()]);
+	Array result = get_random_grid(p_position, p_max_count, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 #if DEBUG_INFORMATION
-	m_debug_timer.stop("query", "get_next_random");
+	m_debug_timer.stop("query", "get_random");
 #endif
 	return result;
 }
 
-Node2D *NeighbourQuery2D::get_next_first_brute_force(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
-	float max_dist_sq = p_max_distance * p_max_distance;
-	float min_dist_sq = p_min_distance * p_min_distance;
-
-	for (const auto &[node, s] : m_subscribers) {
-		if ((s.layer & p_layer_mask) == 0) {
-			continue;
-		}
-		if (s.node_instance_id == p_exclude_id) {
-			continue;
-		}
-		float d = s.position.distance_squared_to(p_position);
-		if (d > max_dist_sq || d < min_dist_sq) {
-			continue;
-		}
-		if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-			continue;
-		}
-		return s.node;
-	}
-	return nullptr;
-}
 
 Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
@@ -543,9 +485,7 @@ Node2D *NeighbourQuery2D::get_next_first(const Vector2 &p_position, float p_max_
 	m_debug_timer.start("query", "get_next_first");
 #endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
-	Node2D *result = ((int)m_subscribers.size() < m_brute_force_threshold)
-			? get_next_first_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
-			: get_next_first_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+	Node2D *result = get_next_first_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 #if DEBUG_INFORMATION
 	m_debug_timer.stop("query", "get_next_first");
 #endif
@@ -612,9 +552,7 @@ Array NeighbourQuery2D::get_all(const Vector2 &p_position, float p_max_distance,
 	m_debug_timer.start("query", "get_all");
 #endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
-	Array result = ((int)m_subscribers.size() < m_brute_force_threshold)
-			? get_all_brute_force(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
-			: get_all_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+	Array result = get_all_grid(p_position, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 #if DEBUG_INFORMATION
 	m_debug_timer.stop("query", "get_all");
 #endif
@@ -715,9 +653,7 @@ Array NeighbourQuery2D::get_closest(const Vector2 &p_position, int p_max_count, 
 	m_debug_timer.start("query", "get_closest");
 #endif
 	const uint64_t exclude_id = p_exclude ? static_cast<uint64_t>(p_exclude->get_instance_id()) : 0;
-	Array result = ((int)m_subscribers.size() < m_brute_force_threshold)
-			? get_closest_brute_force(p_position, p_max_count, p_max_distance, p_min_distance, p_layer_mask, exclude_id)
-			: get_closest_grid(p_position, p_max_count, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
+	Array result = get_closest_grid(p_position, p_max_count, p_max_distance, p_min_distance, p_layer_mask, exclude_id);
 #if DEBUG_INFORMATION
 	m_debug_timer.stop("query", "get_closest");
 #endif

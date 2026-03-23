@@ -4,7 +4,7 @@
 		Node that provides fast spatial neighbourhood queries over subscribed [Node2D] instances.
 	</brief_description>
 	<description>
-		[NeighbourQuery2D] maintains a uniform spatial grid that is rebuilt at a configurable interval during physics processing. [Node2D] instances register themselves via [method subscribe] and can be queried by world position using [method get_next], [method get_next_first], [method get_next_random], [method get_all], and [method get_closest].
+		[NeighbourQuery2D] maintains a uniform spatial grid that is rebuilt at a configurable interval during physics processing. [Node2D] instances register themselves via [method subscribe] and can be queried by world position using [method get_next], [method get_next_first], [method get_random], [method get_all], and [method get_closest].
 		Subscribers outside the [member domain] rectangle are ignored and not placed in the grid. The domain can be visualised in the editor and at runtime via [member draw_domain].
 	</description>
 	<tutorials>
@@ -52,15 +52,16 @@
 				[param exclude] optionally skips a specific subscriber.
 			</description>
 		</method>
-		<method name="get_next_random">
-			<return type="Node2D" />
+		<method name="get_random">
+			<return type="Array" />
 			<param index="0" name="position" type="Vector2" />
-			<param index="1" name="max_distance" type="float" default="1.7976931348623157e+308" />
-			<param index="2" name="min_distance" type="float" default="0.0" />
-			<param index="3" name="layer_mask" type="int" default="4294967295" />
-			<param index="4" name="exclude" type="Node2D" default="null" />
+			<param index="1" name="max_count" type="int" />
+			<param index="2" name="max_distance" type="float" default="1.7976931348623157e+308" />
+			<param index="3" name="min_distance" type="float" default="0.0" />
+			<param index="4" name="layer_mask" type="int" default="4294967295" />
+			<param index="5" name="exclude" type="Node2D" default="null" />
 			<description>
-				Returns a random subscribed [Node2D] within range of [param position] whose layer matches [param layer_mask]. Returns [code]null[/code] if no match is found.
+				Returns an [Array] of up to [param max_count] randomly selected [Node2D] references from subscribers within range of [param position] whose layer matches [param layer_mask]. Returns an empty array if no match is found.
 				[param max_distance] limits the search radius in world units. [param min_distance] excludes subscribers closer than this value.
 				[param exclude] optionally skips a specific subscriber.
 			</description>
