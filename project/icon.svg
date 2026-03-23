@@ -1,11 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 256 256">
-  <!-- Generator: Adobe Illustrator 29.8.5, SVG Export Plug-In . SVG Version: 2.1.1 Build 2)  -->
-  <path d="M127.16,217.68c-52.71,0-95.58-42.88-95.58-95.58S74.46,26.52,127.16,26.52s95.58,42.88,95.58,95.58-42.88,95.58-95.58,95.58ZM127.16,58.38c-35.14,0-63.72,28.59-63.72,63.72s28.59,63.72,63.72,63.72,63.72-28.58,63.72-63.72-28.58-63.72-63.72-63.72Z" style="fill: #8da5f3;"/>
-  <rect x="188.02" y="167.28" width="31.86" height="76.6" transform="translate(-85.63 204.38) rotate(-44.99)" style="fill: #8da5f3;"/>
-  <circle cx="129.04" cy="122.63" r="40.8" style="fill: #8da5f3;"/>
-  <circle cx="29.63" cy="124.21" r="24.8" style="fill: #8da5f3; opacity: .2;"/>
-  <circle cx="227.33" cy="124.88" r="24.8" style="fill: #8da5f3; opacity: .2;"/>
-  <circle cx="92.07" cy="124.88" r="24.8" style="fill: #8da5f3; opacity: .2;"/>
-  <circle cx="161.95" cy="123.98" r="24.8" style="fill: #8da5f3; opacity: .2;"/>
+  <!-- Generator: Adobe Illustrator 30.2.1, SVG Export Plug-In . SVG Version: 2.1.1 Build 1)  -->
+  <path d="M127.16,217.68c-52.71,0-95.58-42.88-95.58-95.58S74.46,26.52,127.16,26.52s95.58,42.88,95.58,95.58-42.88,95.58-95.58,95.58h0ZM127.16,58.38c-35.14,0-63.72,28.59-63.72,63.72s28.59,63.72,63.72,63.72,63.72-28.58,63.72-63.72-28.58-63.72-63.72-63.72Z" style="fill: #6393ff;"/>
+  <rect x="188.02" y="167.28" width="31.86" height="76.6" transform="translate(-85.63 204.38) rotate(-44.99)" style="fill: #6393ff;"/>
+  <circle cx="129.04" cy="122.63" r="40.8" style="fill: #6393ff;"/>
 </svg>
