@@ -1,4 +1,6 @@
-# NeighbourQuery2D
+# <img src="project/icon.svg" width="40" height="40" align="left" style="margin-right:8px"/> NeighbourQuery2D
+
+![Version](https://img.shields.io/badge/version-6-blue) [![Godot 4.6](https://img.shields.io/badge/Godot-4.6-blue?logo=godotengine&logoColor=white)](https://godotengine.org/) ![License](https://img.shields.io/github/license/GeraldKimmersdorfer/godot-neighbour-query-2d)
 
 A Godot 4 GDExtension that provides fast 2D spatial queries for nodes in a scene. It maintains a uniform grid refilled on the physics tick (at adjustable time intervals). It lets you efficiently find nodes nearby.
 
@@ -35,7 +37,7 @@ Check the Godot documentation for more details.
 **Clone with submodules:**
 
 ```shell
-git clone --recurse-submodules https://github.com/your-org/godot-neighbour-query-2d.git
+git clone --recurse-submodules https://github.com/GeraldKimmersdorfer/godot-neighbour-query-2d.git
 ```
 
 Or if you already cloned without submodules:
