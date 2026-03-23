@@ -8,7 +8,7 @@ extends Node2D
 @export var dot_template: PackedScene
 @export var dot_count: int = 1000
 
-enum QueryMode { GET_ALL, GET_NEXT, GET_CLOSEST, GET_NEXT_RANDOM, GET_NEXT_FIRST }
+enum QueryMode { GET_ALL, GET_NEXT, GET_CLOSEST, GET_RANDOM, GET_NEXT_FIRST }
 
 var _dots: Array[Node2D] = []
 var _highlighted: Array[CanvasItem] = []
@@ -66,7 +66,7 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_3:
 			_mode = QueryMode.GET_CLOSEST
 		elif event.keycode == KEY_4:
-			_mode = QueryMode.GET_NEXT_RANDOM
+			_mode = QueryMode.GET_RANDOM
 		elif event.keycode == KEY_5:
 			_mode = QueryMode.GET_NEXT_FIRST
 	if event is InputEventMouseButton:
@@ -122,8 +122,8 @@ func _physics_process(_delta: float) -> void:
 		neighbours = [_nq2d.get_next(mouse_pos, _query_max_range, _query_min_range)]
 	elif _mode == QueryMode.GET_CLOSEST:
 		neighbours = _nq2d.get_closest(mouse_pos, _closest_count, _query_max_range, _query_min_range)
-	elif _mode == QueryMode.GET_NEXT_RANDOM:
-		neighbours = [_nq2d.get_next_random(mouse_pos, _query_max_range, _query_min_range)]
+	elif _mode == QueryMode.GET_RANDOM:
+		neighbours = _nq2d.get_random(mouse_pos, _closest_count, _query_max_range, _query_min_range)
 	else:
 		neighbours = [_nq2d.get_next_first(mouse_pos, _query_max_range, _query_min_range)]
 	
