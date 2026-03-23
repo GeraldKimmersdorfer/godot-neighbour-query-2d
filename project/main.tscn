@@ -26,7 +26,7 @@ size_flags_vertical = 0
 theme_override_styles/normal = SubResource("StyleBoxFlat_h2yge")
 text = "DebugInfo"
 
-[node name="NeighbourQuery2D" type="NeighbourQuery2D" parent="." unique_id=151566138]
+[node name="NeighbourQuery2D" type="NeighbourQuery2D" parent="." unique_id=1303969294]
 grid_size = 64
 use_global_position = false
 domain = Rect2(0, 0, 1400, 900)

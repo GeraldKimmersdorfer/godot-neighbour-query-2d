@@ -3,7 +3,7 @@
 .godot/
 
 # project/bin/ is filled entirely by the build scripts
-project/bin/
+project/bin/*/
 .sconsign*.dblite
 
 # Ignore custom.py
@@ -44,14 +44,8 @@ compile_commands.json
 # Jetbrains
 .idea/
 
-# Root bin/ — ignore compiled platform output, track gdextension and icons
-/bin/android/
-/bin/ios/
-/bin/linux/
-/bin/macos/
-/bin/web/
-/bin/windows/
-/bin/*.uid
+# Root bin/
+/bin/*/
 
 # Cmake
 cmake-build*
