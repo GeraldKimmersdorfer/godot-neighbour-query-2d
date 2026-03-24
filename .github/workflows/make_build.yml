@@ -46,21 +46,12 @@ on:
           - double
           - both
         default: single
-      # --- Release settings ---
       project_name:
-        description: 'Project name (used in release title and description)'
+        description: 'Project name'
         type: string
         default: 'NeighbourQuery2D'
-      create_release:
-        description: 'Create a GitHub release after build'
-        type: boolean
-        default: false
       release_name:
-        description: 'Release name / tag (e.g. v1.0.0) — only used when "Create a GitHub release" is enabled'
-        type: string
-        default: ''
-      release_description:
-        description: 'Release description / changelog — leave empty for auto-generated default. Only used when "Create a GitHub release" is enabled'
+        description: 'Release name (e.g. v1, empty for no release)'
         type: string
         default: ''
 
@@ -209,7 +200,7 @@ jobs:
   release:
     runs-on: ubuntu-22.04
     needs: merge
-    if: ${{ inputs.create_release == true }}
+    if: ${{ inputs.release_name != '' }}
     permissions:
       contents: write
     steps:
@@ -222,10 +213,7 @@ jobs:
           SHORT_SHA="${SHA:0:7}"
           COMMIT_URL="https://github.com/${REPO}/commit/${SHA}"
 
-          DESCRIPTION="${{ inputs.release_description }}"
-          if [ -z "$DESCRIPTION" ]; then
-            DESCRIPTION="${{ inputs.project_name }} ${{ inputs.release_name }} release at revision [${SHORT_SHA}](${COMMIT_URL})"
-          fi
+          DESCRIPTION="${{ inputs.project_name }} ${{ inputs.release_name }} release at revision [${SHORT_SHA}](${COMMIT_URL})"
 
           # Write multiline-safe output
           {
