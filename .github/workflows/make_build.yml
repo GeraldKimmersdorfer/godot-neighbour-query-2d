@@ -1,10 +1,11 @@
 # For syntax, see https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
 # This workflow is triggered manually on the "Actions" tab on GitHub, and can be used to create releases.
 
-name: Compile NeighbourQuery2D for all platforms
+name: Compile and Release
 on:
   workflow_dispatch:
     inputs:
+      # --- Build targets ---
       linux_x86_64:
         description: 'Linux x86_64'
         type: boolean
@@ -45,6 +46,14 @@ on:
           - double
           - both
         default: single
+      project_name:
+        description: 'Project name'
+        type: string
+        default: 'NeighbourQuery2D'
+      release_name:
+        description: 'Release name (e.g. v1, empty for no release)'
+        type: string
+        default: ''
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -58,13 +67,13 @@ jobs:
       - name: Generate matrix
         id: generate
         env:
-          IN_LINUX_X86_64:   ${{ inputs.linux_x86_64 }}
-          IN_LINUX_ARM64:    ${{ inputs.linux_arm64 }}
-          IN_WINDOWS_X86_64: ${{ inputs.windows_x86_64 }}
+          IN_LINUX_X86_64:    ${{ inputs.linux_x86_64 }}
+          IN_LINUX_ARM64:     ${{ inputs.linux_arm64 }}
+          IN_WINDOWS_X86_64:  ${{ inputs.windows_x86_64 }}
           IN_MACOS_UNIVERSAL: ${{ inputs.macos_universal }}
-          IN_ANDROID_ARM64:  ${{ inputs.android_arm64 }}
-          IN_WEB_WASM32:     ${{ inputs.web_wasm32 }}
-          IN_TARGET_TYPE:    ${{ inputs.target_type }}
+          IN_ANDROID_ARM64:   ${{ inputs.android_arm64 }}
+          IN_WEB_WASM32:      ${{ inputs.web_wasm32 }}
+          IN_TARGET_TYPE:     ${{ inputs.target_type }}
           IN_FLOAT_PRECISION: ${{ inputs.float_precision }}
         run: |
           python3 << 'EOF'
@@ -104,26 +113,10 @@ jobs:
     steps:
       # Clone this repository
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
-
-      # Get the current godot-cpp submodule commit for cache invalidation
-      - name: Get godot-cpp commit
-        id: godotcpp
-        shell: bash
-        run: |
-          echo "commit=$(git -C godot-cpp rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      # Setup Python for SCons
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.x"
-
-      - name: Install SCons
-        run: pip install scons
 
       # Add linux x86_32 toolchain
       - name: Install multilib support
@@ -131,50 +124,67 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
 
-      # Cache godot-cpp build artifacts
-      # This significantly speeds up CI because godot-cpp compilation is expensive
-      - name: Cache godot-cpp
-        uses: actions/cache@v4
-        with:
-          path: |
-            godot-cpp/bin
-            godot-cpp/.scons_cache
-          key: godot-cpp-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.target-type }}-${{ steps.godotcpp.outputs.commit }}
-
-      # Setup dependencies
+      # Setup platform-specific toolchains and SCons
       - name: Setup godot-cpp
         uses: ./godot-cpp/.github/actions/setup-godot-cpp
         with:
           platform: ${{ matrix.target.platform }}
           em-version: 3.1.62
 
-      # Clean up previous build artifacts to avoid stale binaries
+      # Restore scons cache (uses SCONS_CACHE env var understood by SCons)
+      - name: Restore .scons_cache
+        uses: ./godot-cpp/.github/actions/godot-cache-restore
+        with:
+          scons-cache: ${{ github.workspace }}/.scons-cache/
+          cache-name: ${{ matrix.target.platform }}_${{ matrix.target.arch }}_${{ matrix.float-precision }}_${{ matrix.target-type }}
+
+      # Remove only compiled binaries from a previous run, preserving .gdextension and .svg
       - name: Clean previous extension builds
-        shell: sh
+        shell: bash
         run: |
-          rm -rf bin
+          find bin -mindepth 2 -type f \( \
+            -name "*.so" -o -name "*.dll" -o -name "*.pdb" -o -name "*.exp" -o -name "*.lib" \
+            -o -name "*.dylib" -o -name "*.wasm" -o -name "*.js" -o -name "*.side.wasm" \
+          \) -delete 2>/dev/null || true
           rm -f .sconsign.dblite
 
-      # Build GDExtension (with caches)
+      # Build GDExtension
       - name: Build GDExtension
-        shell: sh
+        shell: bash
+        env:
+          SCONS_CACHE: ${{ github.workspace }}/.scons-cache/
         run: |
-          scons -j$(nproc) \
+          # nproc is Linux-only; macOS uses sysctl
+          JOBS=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)
+          scons -j"$JOBS" \
             target=${{ matrix.target-type }} \
             platform=${{ matrix.target.platform }} \
             arch=${{ matrix.target.arch }} \
             precision=${{ matrix.float-precision }}
 
-      # Upload the build
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v6
+      # Save scons cache for the next run
+      - name: Save .scons_cache
+        uses: ./godot-cpp/.github/actions/godot-cache-save
         with:
-          name: neighbour-query-2d-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.float-precision }}-${{ matrix.target-type }}
+          scons-cache: ${{ github.workspace }}/.scons-cache/
+          cache-name: ${{ matrix.target.platform }}_${{ matrix.target.arch }}_${{ matrix.float-precision }}_${{ matrix.target-type }}
+
+      # Clean up MSVC-specific linker artifacts
+      - name: Windows - Delete compilation files
+        if: ${{ matrix.target.platform == 'windows' }}
+        shell: pwsh
+        run: |
+          Remove-Item bin/* -Include *.exp,*.lib,*.pdb -Force -ErrorAction SilentlyContinue
+
+      # Upload per-platform artifact (includes .gdextension and .svg from bin/)
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.float-precision }}-${{ matrix.target-type }}
           path: |
             ${{ github.workspace }}/bin/**
 
-  # Merges all the build artifacts together into a single neighbour-query-2d artifact.
-  # If you comment out this step, all the builds will be uploaded individually.
+  # Merges all per-platform artifacts into a single artifact.
   merge:
     runs-on: ubuntu-22.04
     needs: build
@@ -182,6 +192,51 @@ jobs:
       - name: Merge Artifacts
         uses: actions/upload-artifact/merge@v4
         with:
-          name: neighbour-query-2d
-          pattern: neighbour-query-2d-*
+          name: ${{ github.event.repository.name }}
+          pattern: ${{ github.event.repository.name }}-*
           delete-merged: true
+
+  # Optionally create a GitHub release and attach the merged artifact.
+  release:
+    runs-on: ubuntu-22.04
+    needs: merge
+    if: ${{ inputs.release_name != '' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve release description
+        id: meta
+        shell: bash
+        run: |
+          REPO="${{ github.repository }}"
+          SHA="${{ github.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+          COMMIT_URL="https://github.com/${REPO}/commit/${SHA}"
+
+          DESCRIPTION="${{ inputs.project_name }} ${{ inputs.release_name }} release at revision [${SHORT_SHA}](${COMMIT_URL})"
+
+          # Write multiline-safe output
+          {
+            echo "description<<EOF_DESCRIPTION"
+            echo "$DESCRIPTION"
+            echo "EOF_DESCRIPTION"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download merged artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}
+          path: release-files/
+
+      - name: Create binaries zip
+        run: |
+          cd release-files
+          zip -r ../${{ github.event.repository.name }}-${{ inputs.release_name }}.zip .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_name }}
+          name: ${{ inputs.release_name }}
+          body: ${{ steps.meta.outputs.description }}
+          files: ${{ github.event.repository.name }}-${{ inputs.release_name }}.zip
