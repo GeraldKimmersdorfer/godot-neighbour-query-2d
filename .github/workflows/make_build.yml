@@ -205,7 +205,7 @@ jobs:
           pattern: ${{ github.event.repository.name }}-*
           delete-merged: true
 
-  # Optionally create a GitHub release and attach the merged artifact and source code.
+  # Optionally create a GitHub release and attach the merged artifact.
   release:
     runs-on: ubuntu-22.04
     needs: merge
@@ -213,12 +213,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
       - name: Resolve release description
         id: meta
         shell: bash
@@ -251,17 +245,10 @@ jobs:
           cd release-files
           zip -r ../${{ github.event.repository.name }}-${{ inputs.release_name }}.zip .
 
-      - name: Create source code zip
-        run: |
-          git archive --format=zip --prefix=${{ github.event.repository.name }}-${{ inputs.release_name }}/ HEAD \
-            -o ${{ github.event.repository.name }}-${{ inputs.release_name }}-source.zip
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_name }}
           name: ${{ inputs.release_name }}
           body: ${{ steps.meta.outputs.description }}
-          files: |
-            ${{ github.event.repository.name }}-${{ inputs.release_name }}.zip
-            ${{ github.event.repository.name }}-${{ inputs.release_name }}-source.zip
+          files: ${{ github.event.repository.name }}-${{ inputs.release_name }}.zip
