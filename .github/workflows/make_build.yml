@@ -46,14 +46,18 @@ on:
           - double
           - both
         default: single
-      project_name:
-        description: 'Project name'
-        type: string
-        default: 'NeighbourQuery2D'
       release_name:
         description: 'Release name (e.g. v1, empty for no release)'
         type: string
         default: ''
+      project_name:
+        description: 'Project name'
+        type: string
+        default: 'NeighbourQuery2D'
+      project_dir_name:
+        description: 'Project directory name'
+        type: string
+        default: 'neighbour_query_2d'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -222,6 +226,9 @@ jobs:
             echo "EOF_DESCRIPTION"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download merged artifact
         uses: actions/download-artifact@v4
         with:
@@ -230,7 +237,20 @@ jobs:
 
       - name: Create binaries zip
         run: |
-          cd release-files
+          ADDON_DIR="staging/addons/${{ inputs.project_dir_name }}"
+          mkdir -p "$ADDON_DIR"
+
+          # Root-level files
+          cp README.md staging/
+          cp LICENSE.md staging/
+
+          # LICENSE also goes inside the addon folder
+          cp LICENSE.md "$ADDON_DIR/"
+
+          # All built artifacts go inside the addon folder
+          cp -r release-files/. "$ADDON_DIR/"
+
+          cd staging
           zip -r ../${{ github.event.repository.name }}-${{ inputs.release_name }}.zip .
 
       - name: Create GitHub Release
