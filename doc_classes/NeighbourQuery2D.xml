@@ -8,6 +8,7 @@
 		Subscribers outside the [member domain] rectangle are ignored and not placed in the grid. The domain can be visualised in the editor and at runtime via [member draw_domain].
 	</description>
 	<tutorials>
+		<link title="GitHub Repository">https://github.com/GeraldKimmersdorfer/godot-neighbour-query-2d</link>
 	</tutorials>
 	<methods>
 		<method name="subscribe">
