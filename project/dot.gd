@@ -11,7 +11,6 @@ const LAYER_INACTIVE = 2
 		modulate.a = 0.4 if inactive else 1.0
 		set_process(not inactive)
 		if is_inside_tree() and is_instance_valid(nq2d):
-			nq2d.unsubscribe(self)
 			nq2d.subscribe(self, LAYER_INACTIVE if inactive else LAYER_ACTIVE)
 
 @export var bounds: Rect2
@@ -21,14 +20,9 @@ var velocity: Vector2
 
 func _ready() -> void:
 	position = Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
-	nq2d.subscribe(self, LAYER_INACTIVE if inactive else LAYER_ACTIVE)
-	var speed := randf_range(20.0, 120.0)
 	var angle := randf() * TAU
-	velocity = Vector2(cos(angle), sin(angle)) * speed
-
-func _exit_tree() -> void:
-	if is_instance_valid(nq2d):
-		nq2d.unsubscribe(self)
+	velocity = Vector2(cos(angle), sin(angle)) * randf_range(20.0, 120.0)
+	inactive = inactive # call setter for proper init
 
 func _process(delta: float) -> void:
 	position += velocity * delta
