@@ -16,13 +16,23 @@ const BOID_BOUNDS_FORCE: float = 1.0 ## force to pull back when outside
 const BOID_USE_RANDOM_NEIGHBOURS: bool = false
 
 enum MovementMode { NONE, STRAIGHT, BOID }
+enum DisplayMode { NORMAL, INACTIVE, HOVERED }
 
-@export var inactive: bool = false:
+@export var display_mode: DisplayMode = DisplayMode.NORMAL:
 	set(value):
-		inactive = value
-		modulate.a = 0.4 if inactive else 1.0
+		display_mode = value
+		match value:
+			DisplayMode.NORMAL:
+				modulate = Color.WHITE
+				scale = Vector2(1.0, 1.0)
+			DisplayMode.INACTIVE:
+				modulate = Color(1.0, 1.0, 1.0, 0.4)
+				scale = Vector2(1.0, 1.0)
+			DisplayMode.HOVERED:
+				modulate = Color(1.0, 0.0, 0.0)
+				scale = Vector2(1.5, 1.5)
 		if is_inside_tree() and is_instance_valid(nq2d):
-			nq2d.subscribe(self, LAYER_INACTIVE if inactive else LAYER_ACTIVE)
+			nq2d.subscribe(self, LAYER_INACTIVE if value == DisplayMode.INACTIVE else LAYER_ACTIVE)
 
 @export var bounds: Rect2
 @export var movement_mode: MovementMode = MovementMode.STRAIGHT:
@@ -31,7 +41,7 @@ enum MovementMode { NONE, STRAIGHT, BOID }
 		if value == MovementMode.BOID: _movement_func = _boid_process
 		elif value == MovementMode.STRAIGHT: _movement_func = _straight_process
 		else: _movement_func = _none_process
-		set_process(value != MovementMode.NONE and not inactive)
+		set_process(value != MovementMode.NONE)
 
 var nq2d: NeighbourQuery2D
 var velocity: Vector2
@@ -43,7 +53,7 @@ func _ready() -> void:
 	var angle := randf() * TAU
 	velocity = Vector2(cos(angle), sin(angle)) * randf_range(20.0, BOID_MAX_SPEED)
 	movement_mode = movement_mode # call setter to init _movement_func
-	inactive = inactive # call setter for proper init
+	display_mode = display_mode # call setter for proper init
 
 func _process(delta: float) -> void:
 	_movement_func.call(delta)
@@ -65,7 +75,7 @@ func _boid_process(delta: float) -> void:
 	var avg_velocity := Vector2.ZERO
 	var center_of_mass := Vector2.ZERO
 	var count := 0
-	var layer := LAYER_INACTIVE if inactive else LAYER_ACTIVE
+	var layer := LAYER_INACTIVE if display_mode == DisplayMode.INACTIVE else LAYER_ACTIVE
 	var query_result := nq2d.get_random(position, BOID_NEIGHBOUR_COUNT, BOID_PERCEPTION_RADIUS, 0.0, layer, self) if BOID_USE_RANDOM_NEIGHBOURS else nq2d.get_closest(position, BOID_NEIGHBOUR_COUNT, BOID_PERCEPTION_RADIUS, 0.0, layer, self)
 	for n in query_result:
 		var dot := n as Dot

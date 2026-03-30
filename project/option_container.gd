@@ -12,6 +12,7 @@ signal movement_mode_changed(mode: Dot.MovementMode)
 @export var _max_range_slider: Slider
 @export var _label_fps: Label
 @export var _label_movement_mode: Label
+@export var _check_button_validation_check: CheckButton
 
 @export_group("")
 
@@ -19,6 +20,9 @@ var mode: QueryMode = QueryMode.GET_ALL
 var query_max_range: float = 150.0
 var query_min_range: float = 70.0
 var movement_mode: Dot.MovementMode = Dot.MovementMode.STRAIGHT
+
+var validation_test_enabled: bool:
+	get: return _check_button_validation_check.button_pressed
 
 var _updating_sliders: bool = false
 

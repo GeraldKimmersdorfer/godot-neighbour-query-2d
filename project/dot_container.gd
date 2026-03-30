@@ -21,7 +21,7 @@ func _ready() -> void:
 	_info_label.visible = false
 	for i in dot_count:
 		var dot: Node2D = dot_template.instantiate()
-		dot.inactive = i % 2 == 0
+		dot.display_mode = Dot.DisplayMode.INACTIVE if i % 2 == 0 else Dot.DisplayMode.NORMAL
 		dot.nq2d = _nq2d
 		dot.bounds = bounds
 		add_child(dot)
@@ -52,7 +52,7 @@ func _on_ns_debug_info(key: StringName, value: Variant) -> void:
 
 func _spawn_dot() -> void:
 	var dot: Node2D = dot_template.instantiate()
-	dot.inactive = randf() > 0.5
+	dot.display_mode = Dot.DisplayMode.INACTIVE if randf() > 0.5 else Dot.DisplayMode.NORMAL
 	dot.nq2d = _nq2d
 	dot.bounds = _get_bounds()
 	dot.movement_mode = _option_container.movement_mode
@@ -68,18 +68,17 @@ func update_movement_for_all(mode: Dot.MovementMode) -> void:
 	for dot in _dots:
 		dot.movement_mode = mode
 
-func _stress_test() -> void:
-	if _dots.is_empty():
+func _validation_test() -> void:
+	if _dots.is_empty() or not _option_container.validation_test_enabled:
 		return
 	_remove_dot(_dots[randi() % _dots.size()])
 	_spawn_dot()
 
 func _physics_process(_delta: float) -> void:
-	_stress_test()
+	_validation_test()
 	for dot in _highlighted:
 		if is_instance_valid(dot):
-			dot.modulate = Color.WHITE
-			dot.scale = Vector2(1.0, 1.0)
+			dot.display_mode = Dot.DisplayMode.NORMAL
 	_highlighted.clear()
 
 	var mouse_pos := get_global_mouse_position()
@@ -100,10 +99,8 @@ func _physics_process(_delta: float) -> void:
 		neighbours = [_nq2d.get_next_first(mouse_pos, max_range, min_range, Dot.LAYER_ACTIVE)]
 
 	for dot in neighbours:
-		if dot:
-			dot.modulate = Color(1.0, 0.0, 0.0)
-			dot.scale = Vector2(1.5, 1.5)
-			_highlighted.append(dot)
+		dot.display_mode = Dot.DisplayMode.HOVERED
+		_highlighted.append(dot)
 
 	queue_redraw()
 
