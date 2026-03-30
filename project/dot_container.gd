@@ -79,6 +79,7 @@ func _physics_process(_delta: float) -> void:
 	for dot in _highlighted:
 		if is_instance_valid(dot):
 			dot.modulate = Color.WHITE
+			dot.scale = Vector2(1.0, 1.0)
 	_highlighted.clear()
 
 	var mouse_pos := get_global_mouse_position()
@@ -101,6 +102,7 @@ func _physics_process(_delta: float) -> void:
 	for dot in neighbours:
 		if dot:
 			dot.modulate = Color(1.0, 0.0, 0.0)
+			dot.scale = Vector2(1.5, 1.5)
 			_highlighted.append(dot)
 
 	queue_redraw()
