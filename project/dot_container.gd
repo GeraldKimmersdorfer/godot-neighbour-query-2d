@@ -55,6 +55,7 @@ func _spawn_dot() -> void:
 	dot.inactive = randf() > 0.5
 	dot.nq2d = _nq2d
 	dot.bounds = _get_bounds()
+	dot.movement_mode = _option_container.movement_mode
 	add_child(dot)
 	_dots.append(dot)
 
@@ -62,6 +63,10 @@ func _remove_dot(dot: Node2D) -> void:
 	_dots.erase(dot)
 	_highlighted.erase(dot)
 	dot.queue_free()
+
+func update_movement_for_all(mode: Dot.MovementMode) -> void:
+	for dot in _dots:
+		dot.movement_mode = mode
 
 func _stress_test() -> void:
 	if _dots.is_empty():

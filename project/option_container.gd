@@ -4,17 +4,21 @@ class_name OptionContainer
 
 enum QueryMode { GET_ALL, GET_NEXT, GET_CLOSEST, GET_RANDOM, GET_NEXT_FIRST }
 
+signal movement_mode_changed(mode: Dot.MovementMode)
+
 @export_group("Scene Controls")
 @export var _label_mode: Label
 @export var _min_range_slider: Slider
 @export var _max_range_slider: Slider
 @export var _label_fps: Label
+@export var _label_movement_mode: Label
 
 @export_group("")
 
 var mode: QueryMode = QueryMode.GET_ALL
 var query_max_range: float = 150.0
 var query_min_range: float = 70.0
+var movement_mode: Dot.MovementMode = Dot.MovementMode.STRAIGHT
 
 var _updating_sliders: bool = false
 
@@ -32,6 +36,7 @@ func _input(event: InputEvent) -> void:
 			KEY_3: _set_mode(QueryMode.GET_CLOSEST)
 			KEY_4: _set_mode(QueryMode.GET_RANDOM)
 			KEY_5: _set_mode(QueryMode.GET_NEXT_FIRST)
+			KEY_M: _set_movement_mode((movement_mode + 1) % Dot.MovementMode.size() as Dot.MovementMode)
 	if event is InputEventMouseButton:
 		if event.ctrl_pressed:
 			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -43,6 +48,12 @@ func _input(event: InputEvent) -> void:
 				_set_max_range(maxf(query_max_range + 10.0, query_min_range))
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 				_set_max_range(maxf(query_max_range - 10.0, query_min_range + 10.0))
+
+func _set_movement_mode(new_mode: Dot.MovementMode) -> void:
+	movement_mode = new_mode
+	movement_mode_changed.emit(new_mode)
+	if _label_movement_mode:
+		_label_movement_mode.text = Dot.MovementMode.keys()[new_mode].to_lower()
 
 func _set_mode(new_mode: QueryMode) -> void:
 	mode = new_mode

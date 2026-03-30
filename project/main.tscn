@@ -24,12 +24,13 @@ _info_label = NodePath("../HUD/MarginContainer/DebugInfoLabel")
 _nq2d = NodePath("../NeighbourQuery2D")
 _option_container = NodePath("../HUD/MarginContainer/OptionContainer")
 dot_template = ExtResource("2_0xm2m")
-dot_count = 5000
+dot_count = 2000
 
 [node name="NeighbourQuery2D" type="NeighbourQuery2D" parent="." unique_id=1303969294]
 grid_size = 64
 use_global_position = false
 domain = Rect2(0, 0, 1400, 900)
+debug_draw_domain = false
 z_index = -1
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=451879680]
@@ -45,7 +46,7 @@ theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_label_mode", "_min_range_slider", "_max_range_slider", "_label_fps")]
+[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_label_mode", "_min_range_slider", "_max_range_slider", "_label_fps", "_label_movement_mode")]
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
@@ -55,6 +56,7 @@ _label_mode = NodePath("GridContainer/ModeLabel")
 _min_range_slider = NodePath("GridContainer/MinRangeSlider")
 _max_range_slider = NodePath("GridContainer/MaxRangeSlider")
 _label_fps = NodePath("GridContainer/FPSLabel")
+_label_movement_mode = NodePath("GridContainer/MovementModeLabel")
 
 [node name="GridContainer" type="GridContainer" parent="HUD/MarginContainer/OptionContainer" unique_id=1011685911]
 layout_mode = 2
@@ -85,6 +87,19 @@ text = "get_next"
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0, 1, 1)
 text = "[1-5]"
+
+[node name="MovementModeAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1240469463]
+layout_mode = 2
+text = "Move-Mode:"
+
+[node name="MovementModeLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1083158633]
+layout_mode = 2
+text = "BOID"
+
+[node name="MovementModeHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=2081215019]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0, 1, 1)
+text = "[M]"
 
 [node name="MinRangeAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=558835862]
 layout_mode = 2
@@ -126,3 +141,5 @@ size_flags_vertical = 0
 theme_override_fonts/font = SubResource("SystemFont_0xm2m")
 theme_override_styles/normal = SubResource("StyleBoxFlat_h2yge")
 text = "DebugInfo"
+
+[connection signal="movement_mode_changed" from="HUD/MarginContainer/OptionContainer" to="DotContainer" method="update_movement_for_all"]
