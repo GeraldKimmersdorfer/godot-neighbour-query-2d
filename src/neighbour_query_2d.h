@@ -33,12 +33,30 @@ using namespace godot;
 // BUT instanzing those objects comes with too much overhead such that the get_all function was four
 // times slower.
 
+// Per-member data within a SubscriberGroup. moving_entity lives on the group; position is computed on the fly.
 struct Subscriber {
 	Node2D *node = nullptr;
 	// We need to store the node_id for validity check (is_instance_valid does not exists in gdextension)
 	uint64_t node_instance_id = 0;
 	uint32_t layer = 0;
+	// Offset from the group's moving entity position. Zero for solo subscribers.
 	// NOTE: I already tried glm::vec2, also with intrinsics enabled, but no performance gain. godot::Vector2 is fine
+	Vector2 offset;
+};
+
+// One group per unique moving entity. nullptr key (solo group) = each member fetches its own position.
+// Shared-entity groups call get_position() once and apply per-member offsets.
+struct SubscriberGroup {
+	Node2D *moving_entity = nullptr;
+	uint64_t moving_entity_instance_id = 0;
+	std::vector<Subscriber> members;
+};
+
+// Lean struct stored in grid cells containing only what the query functions need. (for better cache locality)
+struct GridEntry {
+	Node2D *node = nullptr;
+	uint64_t node_instance_id = 0;
+	uint32_t layer = 0;
 	Vector2 position;
 };
 
@@ -69,12 +87,12 @@ private:
 	// dont have to check use_global_position for each subscriber in each refresh iteration
 	Vector2 (Node2D::*m_get_position)() const = &Node2D::get_global_position;
 
-	// NOTE: We still keep the Node2D* reference as key for m_subscribers since we otherwise
-	// have to cast node_instance_id to Node2D* and that seems expensive.
-	// WARNING: It may point to freed memory so before use a validity check using the
-	// node_instance_id is necessary!
-	std::unordered_map<Node2D *, Subscriber> m_subscribers;
-	std::mutex m_subscribers_mutex;
+	// Keyed by moving_entity pointer (nullptr = solo group).
+	// WARNING: Keys may point to freed memory — always validate via moving_entity_instance_id before use.
+	std::unordered_map<Node2D *, SubscriberGroup> m_groups;
+	// Reverse lookup: subscriber node → its group key. Enables O(1) unsubscribe and GC cleanup.
+	std::unordered_map<Node2D *, Node2D *> m_node_to_group;
+	std::mutex m_mutex;
 
 	// Background GC thread: once per second validates all subscribers and removes stale ones.
 	std::thread m_gc_thread;
@@ -90,8 +108,8 @@ private:
 	int m_grid_rows = 0;
 	Vector2 m_domain_center;
 	float m_domain_diagonal_half = 0.0f;
-	std::vector<std::vector<Subscriber>> m_grid;
-	std::vector<std::vector<Subscriber>> m_grid_build;
+	std::vector<std::vector<GridEntry>> m_grid;
+	std::vector<std::vector<GridEntry>> m_grid_build;
 
 	inline bool is_cell_in_bounds(int cx, int cy) const {
 		return cx >= 0 && cx < m_grid_cols && cy >= 0 && cy < m_grid_rows;
@@ -131,7 +149,7 @@ public:
 	void _process(double p_delta) override;
 #endif
 
-	void subscribe(Node2D *p_node, uint32_t p_layer);
+	void subscribe(Node2D *p_node, uint32_t p_layer, Node2D *p_moving_entity = nullptr, Vector2 p_offset = Vector2());
 	void unsubscribe(Node2D *p_node);
 	Node2D *get_next(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);
 	Node2D *get_next_first(const Vector2 &p_position, float p_max_distance = std::numeric_limits<float>::max(), float p_min_distance = 0.0f, uint32_t p_layer_mask = 0xFFFFFFFF, Node2D *p_exclude = nullptr);

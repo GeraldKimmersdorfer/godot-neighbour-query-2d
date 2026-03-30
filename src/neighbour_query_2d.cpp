@@ -16,7 +16,7 @@
 #include <random>
 
 void NeighbourQuery2D::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer"), &NeighbourQuery2D::subscribe);
+	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer", "moving_entity", "offset"), &NeighbourQuery2D::subscribe, DEFVAL(Variant()), DEFVAL(Vector2()));
 	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourQuery2D::unsubscribe);
 	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_next, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 	ClassDB::bind_method(D_METHOD("get_next_first", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_next_first, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
@@ -172,13 +172,35 @@ void NeighbourQuery2D::_gc_thread_func() {
 		}
 		int removed = 0;
 		{
-			std::lock_guard<std::mutex> lock(m_subscribers_mutex);
-			for (auto it = m_subscribers.begin(); it != m_subscribers.end();) {
-				if (UtilityFunctions::instance_from_id(it->second.node_instance_id) == nullptr) {
-					it = m_subscribers.erase(it);
-					++removed;
+			std::lock_guard<std::mutex> lock(m_mutex);
+			for (auto group_it = m_groups.begin(); group_it != m_groups.end();) {
+				SubscriberGroup &group = group_it->second;
+				// If the shared moving entity is gone, drop the whole group.
+				if (group.moving_entity != nullptr &&
+						UtilityFunctions::instance_from_id(group.moving_entity_instance_id) == nullptr) {
+					for (auto &sub : group.members) {
+						m_node_to_group.erase(sub.node);
+						++removed;
+					}
+					group_it = m_groups.erase(group_it);
+					continue;
+				}
+				// Sweep individual members.
+				auto &members = group.members;
+				for (auto it = members.begin(); it != members.end();) {
+					if (UtilityFunctions::instance_from_id(it->node_instance_id) == nullptr) {
+						m_node_to_group.erase(it->node);
+						*it = members.back();
+						members.pop_back();
+						++removed;
+					} else {
+						++it;
+					}
+				}
+				if (members.empty()) {
+					group_it = m_groups.erase(group_it);
 				} else {
-					++it;
+					++group_it;
 				}
 			}
 		}
@@ -257,19 +279,41 @@ void NeighbourQuery2D::refresh() {
 	}
 
 	{
-		std::lock_guard<std::mutex> lock(m_subscribers_mutex);
-		for (auto &[node, subscriber] : m_subscribers) {
-			if (UtilityFunctions::instance_from_id(subscriber.node_instance_id) == nullptr) {
-				continue;
+		std::lock_guard<std::mutex> lock(m_mutex);
+		for (auto &[entity_key, group] : m_groups) {
+			if (entity_key == nullptr) {
+				// Solo group: each member fetches its own position.
+				for (auto &sub : group.members) {
+					if (UtilityFunctions::instance_from_id(sub.node_instance_id) == nullptr) {
+						continue;
+					}
+					Vector2 pos = (sub.node->*m_get_position)();
+					int cx = static_cast<int>(std::floor((pos.x - domain.position.x) / grid_size));
+					int cy = static_cast<int>(std::floor((pos.y - domain.position.y) / grid_size));
+					if (!is_cell_in_bounds(cx, cy)) {
+						continue;
+					}
+					m_grid_build[to_cell_index(cx, cy)].push_back(GridEntry{ sub.node, sub.node_instance_id, sub.layer, pos });
+				}
+			} else {
+				// Shared entity group: one get_position() call for all members.
+				if (UtilityFunctions::instance_from_id(group.moving_entity_instance_id) == nullptr) {
+					continue;
+				}
+				Vector2 base = (entity_key->*m_get_position)();
+				for (auto &sub : group.members) {
+					if (UtilityFunctions::instance_from_id(sub.node_instance_id) == nullptr) {
+						continue;
+					}
+					Vector2 pos = base + sub.offset;
+					int cx = static_cast<int>(std::floor((pos.x - domain.position.x) / grid_size));
+					int cy = static_cast<int>(std::floor((pos.y - domain.position.y) / grid_size));
+					if (!is_cell_in_bounds(cx, cy)) {
+						continue;
+					}
+					m_grid_build[to_cell_index(cx, cy)].push_back(GridEntry{ sub.node, sub.node_instance_id, sub.layer, pos });
+				}
 			}
-			subscriber.position = (node->*m_get_position)();
-			int cx = static_cast<int>(std::floor((subscriber.position.x - domain.position.x) / grid_size));
-			int cy = static_cast<int>(std::floor((subscriber.position.y - domain.position.y) / grid_size));
-			// Points outside the domain are ignored and not added to the AS.
-			if (!is_cell_in_bounds(cx, cy)) {
-				continue;
-			}
-			m_grid_build[to_cell_index(cx, cy)].push_back(subscriber);
 		}
 	}
 
@@ -280,14 +324,59 @@ void NeighbourQuery2D::refresh() {
 #endif
 }
 
-void NeighbourQuery2D::subscribe(Node2D *p_node, uint32_t p_layer) {
-	std::lock_guard<std::mutex> lock(m_subscribers_mutex);
-	m_subscribers[p_node] = { p_node, static_cast<uint64_t>(p_node->get_instance_id()), p_layer };
+void NeighbourQuery2D::subscribe(Node2D *p_node, uint32_t p_layer, Node2D *p_moving_entity, Vector2 p_offset) {
+	std::lock_guard<std::mutex> lock(m_mutex);
+	// Remove from current group if re-subscribing.
+	auto lookup_it = m_node_to_group.find(p_node);
+	if (lookup_it != m_node_to_group.end()) {
+		Node2D *old_key = lookup_it->second;
+		auto group_it = m_groups.find(old_key);
+		if (group_it != m_groups.end()) {
+			auto &members = group_it->second.members;
+			for (auto it = members.begin(); it != members.end(); ++it) {
+				if (it->node == p_node) {
+					*it = members.back();
+					members.pop_back();
+					break;
+				}
+			}
+			if (members.empty()) {
+				m_groups.erase(group_it);
+			}
+		}
+	}
+	// Insert into the new group (created on demand).
+	SubscriberGroup &group = m_groups[p_moving_entity];
+	if (group.moving_entity == nullptr && p_moving_entity != nullptr) {
+		group.moving_entity = p_moving_entity;
+		group.moving_entity_instance_id = static_cast<uint64_t>(p_moving_entity->get_instance_id());
+	}
+	group.members.push_back({ p_node, static_cast<uint64_t>(p_node->get_instance_id()), p_layer, p_offset });
+	m_node_to_group[p_node] = p_moving_entity;
 }
 
 void NeighbourQuery2D::unsubscribe(Node2D *p_node) {
-	std::lock_guard<std::mutex> lock(m_subscribers_mutex);
-	m_subscribers.erase(p_node);
+	std::lock_guard<std::mutex> lock(m_mutex);
+	auto lookup_it = m_node_to_group.find(p_node);
+	if (lookup_it == m_node_to_group.end()) {
+		return;
+	}
+	Node2D *group_key = lookup_it->second;
+	auto group_it = m_groups.find(group_key);
+	if (group_it != m_groups.end()) {
+		auto &members = group_it->second.members;
+		for (auto it = members.begin(); it != members.end(); ++it) {
+			if (it->node == p_node) {
+				*it = members.back();
+				members.pop_back();
+				break;
+			}
+		}
+		if (members.empty()) {
+			m_groups.erase(group_it);
+		}
+	}
+	m_node_to_group.erase(lookup_it);
 }
 
 Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
@@ -309,7 +398,7 @@ Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_d
 	float best_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
-	const Subscriber *best = nullptr;
+	const GridEntry *best = nullptr;
 
 	auto check = [&](int cx, int cy) {
 		if (!is_cell_in_bounds(cx, cy)) {
@@ -319,7 +408,7 @@ Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_d
 #if DEBUG_INFORMATION
 		m_grid_cellreads_debug[cell_idx]++;
 #endif
-		for (const Subscriber &s : m_grid[cell_idx]) {
+		for (const GridEntry &s : m_grid[cell_idx]) {
 			if ((s.layer & p_layer_mask) == 0) {
 				continue;
 			}
@@ -401,14 +490,14 @@ Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_cou
 	int min_cy = std::max(0, static_cast<int>(std::floor((p_position.y - range - domain.position.y) / grid_size)));
 	int max_cy = std::min(m_grid_rows - 1, static_cast<int>(std::floor((p_position.y + range - domain.position.y) / grid_size)));
 
-	std::vector<const Subscriber *> candidates;
+	std::vector<const GridEntry *> candidates;
 	for (int cy = min_cy; cy <= max_cy; cy++) {
 		for (int cx = min_cx; cx <= max_cx; cx++) {
 			const int cell_idx = to_cell_index(cx, cy);
 #if DEBUG_INFORMATION
 			m_grid_cellreads_debug[cell_idx]++;
 #endif
-			for (const Subscriber &s : m_grid[cell_idx]) {
+			for (const GridEntry &s : m_grid[cell_idx]) {
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
@@ -431,7 +520,7 @@ Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_cou
 	Array result;
 	while (remaining > 0 && (int)result.size() < p_max_count) {
 		int idx = rng() % remaining;
-		const Subscriber *s = candidates[idx];
+		const GridEntry *s = candidates[idx];
 		candidates[idx] = candidates[--remaining];
 		if (UtilityFunctions::instance_from_id(s->node_instance_id) == nullptr) {
 			continue;
@@ -476,7 +565,7 @@ Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p
 
 
 	// Returns the first valid subscriber in the cell, or nullptr if none.
-	auto check_cell = [&](int cx, int cy) -> const Subscriber * {
+	auto check_cell = [&](int cx, int cy) -> const GridEntry * {
 		if (!is_cell_in_bounds(cx, cy)) {
 			return nullptr;
 		}
@@ -484,7 +573,7 @@ Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p
 #if DEBUG_INFORMATION
 		m_grid_cellreads_debug[cell_idx]++;
 #endif
-		for (const Subscriber &s : m_grid[cell_idx]) {
+		for (const GridEntry &s : m_grid[cell_idx]) {
 			if ((s.layer & p_layer_mask) == 0) {
 				continue;
 			}
@@ -503,7 +592,7 @@ Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p
 		return nullptr;
 	};
 
-	if (const Subscriber *s = check_cell(cx0, cy0)) {
+	if (const GridEntry *s = check_cell(cx0, cy0)) {
 		return s->node;
 	}
 
@@ -513,12 +602,12 @@ Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p
 		}
 
 		for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
-			if (const Subscriber *s = check_cell(cx, cy0 - r)) return s->node;
-			if (const Subscriber *s = check_cell(cx, cy0 + r)) return s->node;
+			if (const GridEntry *s = check_cell(cx, cy0 - r)) return s->node;
+			if (const GridEntry *s = check_cell(cx, cy0 + r)) return s->node;
 		}
 		for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
-			if (const Subscriber *s = check_cell(cx0 - r, cy)) return s->node;
-			if (const Subscriber *s = check_cell(cx0 + r, cy)) return s->node;
+			if (const GridEntry *s = check_cell(cx0 - r, cy)) return s->node;
+			if (const GridEntry *s = check_cell(cx0 + r, cy)) return s->node;
 		}
 	}
 
@@ -570,7 +659,7 @@ Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_dist
 #endif
 			// NOTE: I already tried having template functions with static ifs to completely remove checks like validity, min distance,
 			// and so on from the hot loop. It did not yield any significant change to the execution time. (same for the other get_ functions)
-			for (const Subscriber &s : m_grid[cell_idx]) {
+			for (const GridEntry &s : m_grid[cell_idx]) {
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
@@ -636,7 +725,7 @@ Array NeighbourQuery2D::get_closest_grid(const Vector2 &p_position, int p_max_co
 #if DEBUG_INFORMATION
 		m_grid_cellreads_debug[cell_idx]++;
 #endif
-		for (const Subscriber &s : m_grid[cell_idx]) {
+		for (const GridEntry &s : m_grid[cell_idx]) {
 			if ((s.layer & p_layer_mask) == 0) {
 				continue;
 			}
