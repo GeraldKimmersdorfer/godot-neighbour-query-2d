@@ -39,13 +39,11 @@ struct Subscriber {
 	// We need to store the node_id for validity check (is_instance_valid does not exists in gdextension)
 	uint64_t node_instance_id = 0;
 	uint32_t layer = 0;
-	// Offset from the group's moving entity position. Zero for solo subscribers.
-	// NOTE: I already tried glm::vec2, also with intrinsics enabled, but no performance gain. godot::Vector2 is fine
+	// Offset from the group's moving entity position.
 	Vector2 offset;
 };
 
-// One group per unique moving entity. nullptr key (solo group) = each member fetches its own position.
-// Shared-entity groups call get_position() once and apply per-member offsets.
+// One group per unique moving entity.
 struct SubscriberGroup {
 	Node2D *moving_entity = nullptr;
 	uint64_t moving_entity_instance_id = 0;
@@ -57,6 +55,7 @@ struct GridEntry {
 	Node2D *node = nullptr;
 	uint64_t node_instance_id = 0;
 	uint32_t layer = 0;
+	// NOTE: I already tried glm::vec2, also with intrinsics enabled, but no performance gain. godot::Vector2 is fine
 	Vector2 position;
 };
 

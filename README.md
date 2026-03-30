@@ -22,11 +22,11 @@ A Godot 4 GDExtension that provides fast 2D spatial queries for nodes in a scene
   Returns up to `max_count` nearest subscribers within range.
 
 
-The grid (adjustable via `domain`and `grid_size`) gets refilled every physics frame by default, but that can be throttled (`refresh_intervall`). Query results then may not be accurate, but they do promise that all of the resulting Nodes are alive.
+The grid (adjustable via `domain` and `grid_size`) gets refilled every physics frame by default, but that can be throttled (`refresh_intervall`). Query results may then be slightly stale, but every returned node is guaranteed to be alive.
 
 The domain and grid cell size are adjustable via properties in the editor.
 
-In debug builds the node emits a `debug_info` signal each physics frame with a `debug_report` string containing per-function timings, frame budget percentages, and call counts.
+In debug builds the node emits a `debug_info` signal with a `debug_report` string containing per-function timings, frame budget percentages, and call counts.
 
 Check the Godot documentation for more details.
 

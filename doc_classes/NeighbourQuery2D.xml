@@ -15,15 +15,19 @@
 			<return type="void" />
 			<param index="0" name="node" type="Node2D" />
 			<param index="1" name="layer" type="int" />
+			<param index="2" name="moving_entity" type="Node2D" default="null" />
+			<param index="3" name="offset" type="Vector2" default="Vector2(0, 0)" />
 			<description>
-				Registers [param node] with a collision [param layer] bitmask. If [param node] is already subscribed its entry is overwritten.
+				Registers [param node] with a collision [param layer] bitmask. If [param node] is already subscribed its layer, moving entity, and offset are updated.
+				[param moving_entity] is an optional shared parent node whose position is fetched once per refresh for all subscribers that share it. Each such subscriber's grid position is [code]moving_entity.position + offset[/code].
+				[param offset] is the world-space offset applied to the [param moving_entity] position. Has no effect when [param moving_entity] is [code]null[/code].
 			</description>
 		</method>
 		<method name="unsubscribe">
 			<return type="void" />
 			<param index="0" name="node" type="Node2D" />
 			<description>
-				Removes [param node] from the server so it is no longer returned by spatial queries. Safe to omit if the node is about to be freed — stale entries are cleaned up automatically upon the next refresh.
+				Removes [param node] so it is no longer returned by spatial queries. Safe to omit when freeing a node.A background garbage-collector thread (see [member gc_interval]) automatically removes stale entries.
 			</description>
 		</method>
 		<method name="get_next">
@@ -109,6 +113,9 @@
 		</member>
 		<member name="refresh_intervall" type="float" setter="set_refresh_intervall" getter="get_refresh_intervall" default="0.0">
 			Minimum time in seconds between grid rebuilds. Set to [code]0.0[/code] (default) to rebuild every physics frame. Higher values reduce CPU cost but queried results may be stale.
+		</member>
+		<member name="gc_interval" type="float" setter="set_gc_interval" getter="get_gc_interval" default="1.0">
+			Interval in seconds between background garbage-collection passes.
 		</member>
 		<member name="use_global_position" type="bool" setter="set_use_global_position" getter="get_use_global_position" default="true">
 			When [code]true[/code] (default), subscriber positions are read via [method Node2D.get_global_position]. Set to [code]false[/code] to use [method Node2D.get_position] (local space), which is significantly faster when all subscribers share the same parent and no global transform traversal is needed.
