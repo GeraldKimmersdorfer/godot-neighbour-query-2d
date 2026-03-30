@@ -30,6 +30,9 @@ void NeighbourQuery2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_refresh_intervall", "refresh_intervall"), &NeighbourQuery2D::set_refresh_intervall);
 	ClassDB::bind_method(D_METHOD("get_refresh_intervall"), &NeighbourQuery2D::get_refresh_intervall);
 
+	ClassDB::bind_method(D_METHOD("set_gc_interval", "gc_interval"), &NeighbourQuery2D::set_gc_interval);
+	ClassDB::bind_method(D_METHOD("get_gc_interval"), &NeighbourQuery2D::get_gc_interval);
+
 	ClassDB::bind_method(D_METHOD("set_use_global_position", "use_global_position"), &NeighbourQuery2D::set_use_global_position);
 	ClassDB::bind_method(D_METHOD("get_use_global_position"), &NeighbourQuery2D::get_use_global_position);
 
@@ -53,6 +56,7 @@ void NeighbourQuery2D::_bind_methods() {
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "grid_size"), "set_grid_size", "get_grid_size");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "gc_interval"), "set_gc_interval", "get_gc_interval");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_global_position"), "set_use_global_position", "get_use_global_position");
 	ADD_PROPERTY(PropertyInfo(Variant::RECT2, "domain"), "set_domain", "get_domain");
 
@@ -145,6 +149,46 @@ void NeighbourQuery2D::emit_debug_report() {
 
 #endif
 
+NeighbourQuery2D::~NeighbourQuery2D() {
+	_stop_gc_thread();
+}
+
+void NeighbourQuery2D::_stop_gc_thread() {
+	m_gc_stop.store(true);
+	m_gc_cv.notify_all();
+	if (m_gc_thread.joinable()) {
+		m_gc_thread.join();
+	}
+}
+
+void NeighbourQuery2D::_gc_thread_func() {
+	while (!m_gc_stop.load()) {
+		{
+			std::unique_lock<std::mutex> lock(m_gc_cv_mutex);
+			m_gc_cv.wait_for(lock, std::chrono::duration<float>(gc_interval), [this] { return m_gc_stop.load(); });
+		}
+		if (m_gc_stop.load()) {
+			break;
+		}
+		int removed = 0;
+		{
+			std::lock_guard<std::mutex> lock(m_subscribers_mutex);
+			for (auto it = m_subscribers.begin(); it != m_subscribers.end();) {
+				if (UtilityFunctions::instance_from_id(it->second.node_instance_id) == nullptr) {
+					it = m_subscribers.erase(it);
+					++removed;
+				} else {
+					++it;
+				}
+			}
+		}
+		if (removed > 0) {
+			UtilityFunctions::print("NeighbourQuery2D GC: removed ", removed, " invalid subscriber(s)");
+		}
+	}
+}
+
+
 void NeighbourQuery2D::_ready() {
 	_update_grid_dimensions();
 	if (Engine::get_singleton()->is_editor_hint()) {
@@ -155,6 +199,8 @@ void NeighbourQuery2D::_ready() {
 #endif
 	} else {
 		set_physics_process(true);
+		m_gc_stop.store(false);
+		m_gc_thread = std::thread(&NeighbourQuery2D::_gc_thread_func, this);
 #if DEBUG_INFORMATION
 		set_process(true);
 		m_debug_timer = DebugTimer(Engine::get_singleton()->get_physics_ticks_per_second());
@@ -163,6 +209,7 @@ void NeighbourQuery2D::_ready() {
 }
 
 void NeighbourQuery2D::_physics_process(double p_delta) {
+
 #if DEBUG_INFORMATION
 	if (debug_report_interval >= 0.0f) {
 		m_time_since_debug_report += p_delta;
@@ -209,25 +256,21 @@ void NeighbourQuery2D::refresh() {
 		cell.clear();
 	}
 
-	std::vector<Node2D *> invalid_nodes;
-
-	for (auto &[node, subscriber] : m_subscribers) {
-		if (UtilityFunctions::instance_from_id(subscriber.node_instance_id) == nullptr) {
-			invalid_nodes.push_back(node);
-			continue;
+	{
+		std::lock_guard<std::mutex> lock(m_subscribers_mutex);
+		for (auto &[node, subscriber] : m_subscribers) {
+			if (UtilityFunctions::instance_from_id(subscriber.node_instance_id) == nullptr) {
+				continue;
+			}
+			subscriber.position = (node->*m_get_position)();
+			int cx = static_cast<int>(std::floor((subscriber.position.x - domain.position.x) / grid_size));
+			int cy = static_cast<int>(std::floor((subscriber.position.y - domain.position.y) / grid_size));
+			// Points outside the domain are ignored and not added to the AS.
+			if (!is_cell_in_bounds(cx, cy)) {
+				continue;
+			}
+			m_grid_build[to_cell_index(cx, cy)].push_back(subscriber);
 		}
-		subscriber.position = (node->*m_get_position)();
-		int cx = static_cast<int>(std::floor((subscriber.position.x - domain.position.x) / grid_size));
-		int cy = static_cast<int>(std::floor((subscriber.position.y - domain.position.y) / grid_size));
-		// Points outside the domain are ignored and not added to the AS.
-		if (!is_cell_in_bounds(cx, cy)) {
-			continue;
-		}
-		m_grid_build[to_cell_index(cx, cy)].push_back(subscriber);
-	}
-
-	for (Node2D *node : invalid_nodes) {
-		m_subscribers.erase(node);
 	}
 
 	std::swap(m_grid, m_grid_build);
@@ -238,10 +281,12 @@ void NeighbourQuery2D::refresh() {
 }
 
 void NeighbourQuery2D::subscribe(Node2D *p_node, uint32_t p_layer) {
+	std::lock_guard<std::mutex> lock(m_subscribers_mutex);
 	m_subscribers[p_node] = { p_node, static_cast<uint64_t>(p_node->get_instance_id()), p_layer };
 }
 
 void NeighbourQuery2D::unsubscribe(Node2D *p_node) {
+	std::lock_guard<std::mutex> lock(m_subscribers_mutex);
 	m_subscribers.erase(p_node);
 }
 
@@ -678,6 +723,14 @@ void NeighbourQuery2D::set_refresh_intervall(float p_refresh_intervall) {
 
 float NeighbourQuery2D::get_refresh_intervall() const {
 	return refresh_intervall;
+}
+
+void NeighbourQuery2D::set_gc_interval(float p_gc_interval) {
+	gc_interval = p_gc_interval;
+}
+
+float NeighbourQuery2D::get_gc_interval() const {
+	return gc_interval;
 }
 
 void NeighbourQuery2D::set_use_global_position(bool p_use_global_position) {

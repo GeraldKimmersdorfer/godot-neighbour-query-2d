@@ -14,7 +14,11 @@
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector2i.hpp>
 
+#include <atomic>
+#include <condition_variable>
 #include <limits>
+#include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -50,6 +54,7 @@ public:
 private:
 	int grid_size = 128;
 	float refresh_intervall = 0.0f;
+	float gc_interval = 1.0f;
 	double m_time_since_refresh = 0.0;
 	Rect2 domain = Rect2(0, 0, 1000, 600);
 	bool debug_draw_domain = true;
@@ -69,6 +74,15 @@ private:
 	// WARNING: It may point to freed memory so before use a validity check using the
 	// node_instance_id is necessary!
 	std::unordered_map<Node2D *, Subscriber> m_subscribers;
+	std::mutex m_subscribers_mutex;
+
+	// Background GC thread: once per second validates all subscribers and removes stale ones.
+	std::thread m_gc_thread;
+	std::atomic<bool> m_gc_stop{ false };
+	std::condition_variable m_gc_cv;
+	std::mutex m_gc_cv_mutex;
+	void _gc_thread_func();
+	void _stop_gc_thread();
 
 	// Flat cell array [cy * m_grid_cols + cx], dimensions derived from domain and grid_size.
 	// m_grid_build is written by refresh() without holding the lock, then swapped with m_grid.
@@ -107,7 +121,7 @@ protected:
 
 public:
 	NeighbourQuery2D() = default;
-	~NeighbourQuery2D() override = default;
+	~NeighbourQuery2D() override;
 
 	void _ready() override;
 	void _physics_process(double p_delta) override;
@@ -130,6 +144,9 @@ public:
 
 	void set_refresh_intervall(float p_refresh_intervall);
 	float get_refresh_intervall() const;
+
+	void set_gc_interval(float p_gc_interval);
+	float get_gc_interval() const;
 
 	void set_use_global_position(bool p_use_global_position);
 	bool get_use_global_position() const;
