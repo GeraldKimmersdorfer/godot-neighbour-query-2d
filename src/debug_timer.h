@@ -42,10 +42,10 @@ public:
 			grand_ms += group_ms;
 
 			oss << "\n";
-			oss << "    " << group << ": " << format_entry(group_ms, group_count, nframes, frame_budget_ms);
+			oss << "  " << group << ": " << format_entry(group_ms, group_count, nframes, frame_budget_ms);
 			for (const auto &[key, e] : entries)
 				if (e.count > 0)
-					oss << "\n       " << key << ": " << format_entry(ms(e), e.count, nframes);
+					oss << "\n    " << key << ": " << format_entry(ms(e), e.count, nframes);
 		}
 		return "Total: " + format_entry(grand_ms, 0, nframes, frame_budget_ms) + oss.str();
 	}

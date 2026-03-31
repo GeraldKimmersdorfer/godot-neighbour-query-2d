@@ -84,7 +84,7 @@ void NeighbourQuery2D::_draw() {
 
 	draw_rect(domain, fill_color, true);
 
-	{
+	if (debug_draw_heatmap_intervall >= 0.0f) {
 		const std::vector<int> &counts = (debug_heatmap_mode == QUERY_COUNTS) ? m_grid_querycount_debug : m_grid_cellreads_debug;
 		int max_count = 0;
 		for (int c : counts) {
