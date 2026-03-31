@@ -30,6 +30,7 @@ dot_count = 2000
 grid_size = 64
 use_global_position = false
 domain = Rect2(0, 0, 1400, 900)
+debug_heatmap_mode = 1
 z_index = -1
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=451879680]
@@ -45,13 +46,12 @@ theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_label_mode", "_min_range_slider", "_max_range_slider", "_label_fps", "_label_movement_mode", "_check_button_validation_check")]
+[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_min_range_slider", "_max_range_slider", "_label_fps", "_label_movement_mode", "_check_button_validation_check")]
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_h2yge")
 script = ExtResource("3_h2yge")
-_label_mode = NodePath("GridContainer/ModeLabel")
 _min_range_slider = NodePath("GridContainer/MinRangeSlider")
 _max_range_slider = NodePath("GridContainer/MaxRangeSlider")
 _label_fps = NodePath("GridContainer/FPSLabel")
@@ -74,19 +74,6 @@ text = "60"
 
 [node name="Placeholder" type="Control" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=930796508]
 layout_mode = 2
-
-[node name="ModeAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=2050042597]
-layout_mode = 2
-text = "Mode:"
-
-[node name="ModeLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=944801805]
-layout_mode = 2
-text = "get_next"
-
-[node name="ModeHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=718063445]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0, 1, 1)
-text = "[1-5]"
 
 [node name="MovementModeAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1240469463]
 layout_mode = 2

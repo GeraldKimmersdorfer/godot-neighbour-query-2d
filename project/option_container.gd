@@ -2,12 +2,10 @@ extends PanelContainer
 
 class_name OptionContainer
 
-enum QueryMode { GET_ALL, GET_NEXT, GET_CLOSEST, GET_RANDOM, GET_NEXT_FIRST }
-
 signal movement_mode_changed(mode: Dot.MovementMode)
+signal ranges_changed(max_range: float, min_range: float)
 
 @export_group("Scene Controls")
-@export var _label_mode: Label
 @export var _min_range_slider: Slider
 @export var _max_range_slider: Slider
 @export var _label_fps: Label
@@ -16,7 +14,6 @@ signal movement_mode_changed(mode: Dot.MovementMode)
 
 @export_group("")
 
-var mode: QueryMode = QueryMode.GET_ALL
 var query_max_range: float = 150.0
 var query_min_range: float = 70.0
 var movement_mode: Dot.MovementMode = Dot.MovementMode.STRAIGHT
@@ -30,17 +27,11 @@ func _ready() -> void:
 	_min_range_slider.value_changed.connect(_on_min_range_slider_changed)
 	_max_range_slider.value_changed.connect(_on_max_range_slider_changed)
 	_sync_sliders()
-	_sync_mode_label()
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
-		match event.keycode:
-			KEY_1: _set_mode(QueryMode.GET_ALL)
-			KEY_2: _set_mode(QueryMode.GET_NEXT)
-			KEY_3: _set_mode(QueryMode.GET_CLOSEST)
-			KEY_4: _set_mode(QueryMode.GET_RANDOM)
-			KEY_5: _set_mode(QueryMode.GET_NEXT_FIRST)
-			KEY_M: _set_movement_mode((movement_mode + 1) % Dot.MovementMode.size() as Dot.MovementMode)
+		if event.keycode == KEY_M:
+			_set_movement_mode((movement_mode + 1) % Dot.MovementMode.size() as Dot.MovementMode)
 	if event is InputEventMouseButton:
 		if event.ctrl_pressed:
 			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -59,21 +50,15 @@ func _set_movement_mode(new_mode: Dot.MovementMode) -> void:
 	if _label_movement_mode:
 		_label_movement_mode.text = Dot.MovementMode.keys()[new_mode].to_lower()
 
-func _set_mode(new_mode: QueryMode) -> void:
-	mode = new_mode
-	_sync_mode_label()
-
 func _set_max_range(value: float) -> void:
 	query_max_range = value
+	ranges_changed.emit(query_max_range, query_min_range)
 	_sync_sliders()
 
 func _set_min_range(value: float) -> void:
 	query_min_range = value
+	ranges_changed.emit(query_max_range, query_min_range)
 	_sync_sliders()
-
-func _sync_mode_label() -> void:
-	if _label_mode:
-		_label_mode.text = QueryMode.keys()[mode].to_lower()
 
 func _process(_delta: float) -> void:
 	if _label_fps:

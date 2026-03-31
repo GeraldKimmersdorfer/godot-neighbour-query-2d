@@ -10,34 +10,37 @@ extends Node2D
 @export var dot_count: int = 1000
 
 var _dots: Array[Node2D] = []
-var _highlighted: Array[CanvasItem] = []
-var _closest_count: int = 5
+var _query_nodes: Array[DotQueryNode] = []
 var _debug_info: Dictionary = {}
 
 func _ready() -> void:
 	_nq2d.debug_info.connect(_on_ns_debug_info)
-	get_viewport().size_changed.connect(_on_viewport_size_changed)
-	var bounds := _get_bounds()
+	_option_container.ranges_changed.connect(_on_ranges_changed)
 	_info_label.visible = false
 	for i in dot_count:
 		var dot: Node2D = dot_template.instantiate()
 		dot.display_mode = Dot.DisplayMode.INACTIVE if i % 2 == 0 else Dot.DisplayMode.NORMAL
 		dot.nq2d = _nq2d
-		dot.bounds = bounds
+		dot.bounds = _nq2d.domain
 		add_child(dot)
 		_dots.append(dot)
+	var bounds: Rect2 = _nq2d.domain
+	var center := bounds.get_center()
+	for func_idx in DotQueryNode.QueryFunc.size():
+		var qn := DotQueryNode.new()
+		qn.query_func = func_idx as DotQueryNode.QueryFunc
+		qn.query_max_range = _option_container.query_max_range
+		qn.query_min_range = _option_container.query_min_range
+		qn.bounds = bounds
+		qn.nq2d = _nq2d
+		qn.position = center
+		add_child(qn)
+		_query_nodes.append(qn)
 
-func _get_bounds() -> Rect2:
-	var gs := float(_nq2d.grid_size)
-	var viewport_size := get_viewport_rect().size
-	# Snap to the last fully visible cell boundary, then pad by one cell on each side
-	var snapped_size := Vector2(floor(viewport_size.x / gs) * gs, floor(viewport_size.y / gs) * gs)
-	return Rect2(Vector2(gs, gs), snapped_size - Vector2(gs * 2.0, gs * 2.0))
-
-func _on_viewport_size_changed() -> void:
-	var bounds := _get_bounds()
-	for dot in _dots:
-		dot.bounds = bounds
+func _on_ranges_changed(max_range: float, min_range: float) -> void:
+	for qn in _query_nodes:
+		qn.query_max_range = max_range
+		qn.query_min_range = min_range
 
 func _on_ns_debug_info(key: StringName, value: Variant) -> void:
 	_debug_info[key] = value
@@ -54,14 +57,13 @@ func _spawn_dot() -> void:
 	var dot: Node2D = dot_template.instantiate()
 	dot.display_mode = Dot.DisplayMode.INACTIVE if randf() > 0.5 else Dot.DisplayMode.NORMAL
 	dot.nq2d = _nq2d
-	dot.bounds = _get_bounds()
+	dot.bounds = _nq2d.domain
 	dot.movement_mode = _option_container.movement_mode
 	add_child(dot)
 	_dots.append(dot)
 
 func _remove_dot(dot: Node2D) -> void:
 	_dots.erase(dot)
-	_highlighted.erase(dot)
 	dot.queue_free()
 
 func update_movement_for_all(mode: Dot.MovementMode) -> void:
@@ -76,38 +78,3 @@ func _validation_test() -> void:
 
 func _physics_process(_delta: float) -> void:
 	_validation_test()
-	for dot in _highlighted:
-		if is_instance_valid(dot):
-			dot.display_mode = Dot.DisplayMode.NORMAL
-	_highlighted.clear()
-
-	var mouse_pos := get_global_mouse_position()
-	var neighbours = []
-	var mode := _option_container.mode
-	var max_range := _option_container.query_max_range
-	var min_range := _option_container.query_min_range
-
-	if mode == OptionContainer.QueryMode.GET_ALL:
-		neighbours = _nq2d.get_all(mouse_pos, max_range, min_range, Dot.LAYER_ACTIVE)
-	elif mode == OptionContainer.QueryMode.GET_NEXT:
-		neighbours = [_nq2d.get_next(mouse_pos, max_range, min_range, Dot.LAYER_ACTIVE)]
-	elif mode == OptionContainer.QueryMode.GET_CLOSEST:
-		neighbours = _nq2d.get_closest(mouse_pos, _closest_count, max_range, min_range, Dot.LAYER_ACTIVE)
-	elif mode == OptionContainer.QueryMode.GET_RANDOM:
-		neighbours = _nq2d.get_random(mouse_pos, _closest_count, max_range, min_range, Dot.LAYER_ACTIVE)
-	else:
-		neighbours = [_nq2d.get_next_first(mouse_pos, max_range, min_range, Dot.LAYER_ACTIVE)]
-
-	for dot in neighbours:
-		dot.display_mode = Dot.DisplayMode.HOVERED
-		_highlighted.append(dot)
-
-	queue_redraw()
-
-func _draw() -> void:
-	var mouse_pos := get_global_mouse_position()
-	var max_range := _option_container.query_max_range
-	var min_range := _option_container.query_min_range
-	draw_arc(mouse_pos, max_range, 0.0, TAU, 64, Color(1.0, 0.0, 0.0, 1.0), 2)
-	if min_range > 0.0:
-		draw_arc(mouse_pos, min_range, 0.0, TAU, 64, Color(1.0, 0.0, 0.0, 0.7), 2)

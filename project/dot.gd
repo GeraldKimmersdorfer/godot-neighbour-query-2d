@@ -18,21 +18,35 @@ const BOID_USE_RANDOM_NEIGHBOURS: bool = false
 enum MovementMode { NONE, STRAIGHT, BOID }
 enum DisplayMode { NORMAL, INACTIVE, HOVERED }
 
+var _highlights: Dictionary = {}  ## Node -> Color
+
 @export var display_mode: DisplayMode = DisplayMode.NORMAL:
 	set(value):
 		display_mode = value
-		match value:
-			DisplayMode.NORMAL:
-				modulate = Color.WHITE
-				scale = Vector2(1.0, 1.0)
-			DisplayMode.INACTIVE:
-				modulate = Color(1.0, 1.0, 1.0, 0.4)
-				scale = Vector2(1.0, 1.0)
-			DisplayMode.HOVERED:
-				modulate = Color(1.0, 0.0, 0.0)
-				scale = Vector2(1.5, 1.5)
+		_apply_highlights()
 		if is_inside_tree() and is_instance_valid(nq2d):
 			nq2d.subscribe(self, LAYER_INACTIVE if value == DisplayMode.INACTIVE else LAYER_ACTIVE)
+
+func add_highlight(node: Node, color: Color) -> void:
+	_highlights[node] = color
+	_apply_highlights()
+
+func remove_highlight(node: Node) -> void:
+	_highlights.erase(node)
+	_apply_highlights()
+
+func _apply_highlights() -> void:
+	if _highlights.is_empty():
+		scale = Vector2(1.0, 1.0)
+		match display_mode:
+			DisplayMode.NORMAL: modulate = Color.WHITE
+			DisplayMode.INACTIVE: modulate = Color(1.0, 1.0, 1.0, 0.4)
+		return
+	var blended := Color(0.0, 0.0, 0.0, 0.0)
+	for c in _highlights.values():
+		blended += c
+	modulate = blended / _highlights.size()
+	scale = Vector2(1.5, 1.5)
 
 @export var bounds: Rect2
 @export var movement_mode: MovementMode = MovementMode.STRAIGHT:
