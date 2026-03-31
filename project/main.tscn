@@ -47,14 +47,16 @@ theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_min_range_slider", "_max_range_slider", "_label_fps", "_label_movement_mode", "_check_button_validation_check")]
+[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_min_range_slider", "_max_range_slider", "_min_range_label", "_max_range_label", "_label_fps", "_label_movement_mode", "_check_button_validation_check")]
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_h2yge")
 script = ExtResource("3_h2yge")
-_min_range_slider = NodePath("GridContainer/MinRangeSlider")
-_max_range_slider = NodePath("GridContainer/MaxRangeSlider")
+_min_range_slider = NodePath("")
+_max_range_slider = NodePath("")
+_min_range_label = NodePath("GridContainer/MinRangeLabel")
+_max_range_label = NodePath("GridContainer/MaxRangeLabel")
 _label_fps = NodePath("GridContainer/FPSLabel")
 _label_movement_mode = NodePath("GridContainer/MovementModeLabel")
 _check_button_validation_check = NodePath("GridContainer/ValCheckEnabled")
@@ -93,12 +95,9 @@ text = "[M]"
 layout_mode = 2
 text = "Min-Range:"
 
-[node name="MinRangeSlider" type="HSlider" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=999462153]
-custom_minimum_size = Vector2(100, 0)
+[node name="MinRangeLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=111469668]
 layout_mode = 2
-size_flags_vertical = 4
-max_value = 1000.0
-step = 10.0
+text = "Min-Range:"
 
 [node name="MinRangeHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1103541635]
 layout_mode = 2
@@ -109,12 +108,9 @@ text = "[Strg + whell]"
 layout_mode = 2
 text = "Max-Range:"
 
-[node name="MaxRangeSlider" type="HSlider" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1380226354]
-custom_minimum_size = Vector2(100, 0)
+[node name="MaxRangeLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=2021386563]
 layout_mode = 2
-size_flags_vertical = 4
-max_value = 1000.0
-step = 10.0
+text = "Min-Range:"
 
 [node name="MaxRangeHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=942080262]
 layout_mode = 2
@@ -128,7 +124,6 @@ text = "Validation-Check:"
 [node name="ValCheckEnabled" type="CheckButton" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1959444444]
 layout_mode = 2
 size_flags_horizontal = 0
-button_pressed = true
 
 [node name="Placeholder2" type="Control" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1876377537]
 layout_mode = 2

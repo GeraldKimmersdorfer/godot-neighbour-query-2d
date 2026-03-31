@@ -18,12 +18,7 @@ func _ready() -> void:
 	_option_container.ranges_changed.connect(_on_ranges_changed)
 	_info_label.visible = false
 	for i in dot_count:
-		var dot: Node2D = dot_template.instantiate()
-		dot.display_mode = Dot.DisplayMode.INACTIVE if i % 2 == 0 else Dot.DisplayMode.NORMAL
-		dot.nq2d = _nq2d
-		dot.bounds = _nq2d.domain
-		add_child(dot)
-		_dots.append(dot)
+		_spawn_dot()
 	var bounds: Rect2 = _nq2d.domain
 	var center := bounds.get_center()
 	for func_idx in DotQueryNode.QueryFunc.size():
