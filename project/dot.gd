@@ -63,7 +63,6 @@ var velocity: Vector2
 var _movement_func: Callable
 
 func _ready() -> void:
-	position = Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
 	var angle := randf() * TAU
 	velocity = Vector2(cos(angle), sin(angle)) * randf_range(20.0, BOID_MAX_SPEED)
 	movement_mode = movement_mode # call setter to init _movement_func

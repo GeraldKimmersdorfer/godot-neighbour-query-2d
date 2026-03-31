@@ -1,3 +1,4 @@
+@tool
 extends Node2D
 
 @export_group("Scene Controls")
@@ -5,22 +6,36 @@ extends Node2D
 @export var _nq2d: NeighbourQuery2D
 @export var _option_container: OptionContainer
 
+enum InitPlacementMode { RANDOM, DENSITY_TEXTURE_BASED }
+
 @export_group("")
 @export var dot_template: PackedScene
 @export var dot_count: int = 1000
+@export var placement_mode: InitPlacementMode = InitPlacementMode.RANDOM:
+	set(value):
+		placement_mode = value
+		queue_redraw()
+@export var density_texture: Texture2D:
+	set(value):
+		density_texture = value
+		_density_image = null
+		queue_redraw()
 
 var _dots: Array[Node2D] = []
+var _density_image: Image
 var _query_nodes: Array[DotQueryNode] = []
 var _debug_info: Dictionary = {}
 
 func _ready() -> void:
+	if Engine.is_editor_hint(): return
+	if density_texture:
+		density_texture.changed.connect(reinitialize_positions, CONNECT_ONE_SHOT)
 	_nq2d.debug_info.connect(_on_ns_debug_info)
 	_option_container.ranges_changed.connect(_on_ranges_changed)
 	_info_label.visible = false
 	for i in dot_count:
 		_spawn_dot()
 	var bounds: Rect2 = _nq2d.domain
-	var center := bounds.get_center()
 	for func_idx in DotQueryNode.QueryFunc.size():
 		var qn := DotQueryNode.new()
 		qn.query_func = func_idx as DotQueryNode.QueryFunc
@@ -28,9 +43,28 @@ func _ready() -> void:
 		qn.query_min_range = _option_container.query_min_range
 		qn.bounds = bounds
 		qn.nq2d = _nq2d
-		qn.position = center
+		qn.position = bounds.get_center()
 		add_child(qn)
 		_query_nodes.append(qn)
+
+func reinitialize_positions() -> void:
+	_density_image = null
+	for dot in _dots:
+		dot.position = _get_spawn_position()
+
+func _get_spawn_position() -> Vector2:
+	var bounds: Rect2 = _nq2d.domain
+	if placement_mode == InitPlacementMode.DENSITY_TEXTURE_BASED and density_texture and not _density_image:
+		_density_image = density_texture.get_image()
+	if placement_mode == InitPlacementMode.RANDOM or not _density_image:
+		return Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
+	for _i in 100:
+		var pos := Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
+		var uv := (pos - bounds.position) / bounds.size
+		var px := _density_image.get_pixel(int(uv.x * (_density_image.get_width() - 1)), int(uv.y * (_density_image.get_height() - 1)))
+		if randf() < px.r:
+			return pos
+	return Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
 
 func _on_ranges_changed(max_range: float, min_range: float) -> void:
 	for qn in _query_nodes:
@@ -55,6 +89,7 @@ func _spawn_dot() -> void:
 	dot.bounds = _nq2d.domain
 	dot.movement_mode = _option_container.movement_mode
 	add_child(dot)
+	dot.position = _get_spawn_position()
 	_dots.append(dot)
 
 func _remove_dot(dot: Node2D) -> void:
@@ -72,4 +107,9 @@ func _validation_test() -> void:
 	_spawn_dot()
 
 func _physics_process(_delta: float) -> void:
+	if Engine.is_editor_hint(): return
 	_validation_test()
+
+func _draw() -> void:
+	if density_texture and placement_mode == InitPlacementMode.DENSITY_TEXTURE_BASED:
+		draw_texture_rect(density_texture, _nq2d.domain, false, Color(1, 1, 1, 0.2))

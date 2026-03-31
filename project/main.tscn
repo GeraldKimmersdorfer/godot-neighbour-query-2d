@@ -4,6 +4,19 @@
 [ext_resource type="PackedScene" uid="uid://byiom0kxdemif" path="res://dot.tscn" id="2_0xm2m"]
 [ext_resource type="Script" uid="uid://vog5xjma7klm" path="res://option_container.gd" id="3_h2yge"]
 
+[sub_resource type="Gradient" id="Gradient_h2yge"]
+offsets = PackedFloat32Array(0.596, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_h2yge"]
+frequency = 0.0068
+fractal_gain = 0.06
+metadata/_preview_in_3d_space_ = true
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_h2yge"]
+noise = SubResource("FastNoiseLite_h2yge")
+color_ramp = SubResource("Gradient_h2yge")
+invert = true
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_h2yge"]
 bg_color = Color(0.105882354, 0.105882354, 0.105882354, 0.8627451)
 expand_margin_left = 10.0
@@ -25,13 +38,13 @@ _nq2d = NodePath("../NeighbourQuery2D")
 _option_container = NodePath("../HUD/MarginContainer/OptionContainer")
 dot_template = ExtResource("2_0xm2m")
 dot_count = 5000
+placement_mode = 1
+density_texture = SubResource("NoiseTexture2D_h2yge")
 
 [node name="NeighbourQuery2D" type="NeighbourQuery2D" parent="." unique_id=1303969294]
 grid_size = 64
 use_global_position = false
 domain = Rect2(0, 0, 1400, 900)
-debug_draw_heatmap_intervall = -1.0
-debug_heatmap_mode = 1
 z_index = -1
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=451879680]
@@ -47,14 +60,12 @@ theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_min_range_slider", "_max_range_slider", "_min_range_label", "_max_range_label", "_label_fps", "_label_movement_mode", "_check_button_validation_check")]
+[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_min_range_label", "_max_range_label", "_label_fps", "_label_movement_mode", "_check_button_validation_check")]
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_h2yge")
 script = ExtResource("3_h2yge")
-_min_range_slider = NodePath("")
-_max_range_slider = NodePath("")
 _min_range_label = NodePath("GridContainer/MinRangeLabel")
 _max_range_label = NodePath("GridContainer/MaxRangeLabel")
 _label_fps = NodePath("GridContainer/FPSLabel")
