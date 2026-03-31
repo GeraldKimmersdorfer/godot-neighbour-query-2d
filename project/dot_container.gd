@@ -1,5 +1,6 @@
 @tool
 extends Node2D
+class_name DotContainer
 
 @export_group("Scene Controls")
 @export var _info_label: Label
@@ -109,6 +110,33 @@ func _validation_test() -> void:
 func _physics_process(_delta: float) -> void:
 	if Engine.is_editor_hint(): return
 	_validation_test()
+
+func start_benchmark(node_count: int, p_placement_mode: InitPlacementMode, p_movement_mode: Dot.MovementMode, benchmark_time: float) -> String:
+	for dot in _dots:
+		dot.queue_free()
+	_dots.clear()
+	placement_mode = p_placement_mode
+	for i in node_count:
+		_spawn_dot()
+	update_movement_for_all(p_movement_mode)
+	for qn in _query_nodes:
+		qn._time = DotQueryNode.LISSAJOUS_TIME_OFFSETS[qn.query_func]
+	var original_interval: float = _nq2d.debug_report_interval
+	_nq2d.debug_report_interval = 0.0
+	await _wait_for_debug_report()
+	_nq2d.debug_report_interval = benchmark_time
+	var report := await _wait_for_debug_report()
+	_nq2d.debug_report_interval = original_interval
+	return report
+
+func _wait_for_debug_report() -> String:
+	var key: StringName = &""
+	var report: String = ""
+	while key != &"debug_report":
+		var args: Array = await _nq2d.debug_info
+		key = args[0]
+		report = args[1]
+	return report
 
 func _draw() -> void:
 	if density_texture and placement_mode == InitPlacementMode.DENSITY_TEXTURE_BASED:

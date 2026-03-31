@@ -60,7 +60,7 @@ theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_min_range_label", "_max_range_label", "_label_fps", "_label_movement_mode", "_check_button_validation_check")]
+[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_min_range_label", "_max_range_label", "_label_fps", "_label_movement_mode", "_check_button_validation_check", "_dot_container")]
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
@@ -71,6 +71,7 @@ _max_range_label = NodePath("GridContainer/MaxRangeLabel")
 _label_fps = NodePath("GridContainer/FPSLabel")
 _label_movement_mode = NodePath("GridContainer/MovementModeLabel")
 _check_button_validation_check = NodePath("GridContainer/ValCheckEnabled")
+_dot_container = NodePath("../../../DotContainer")
 
 [node name="GridContainer" type="GridContainer" parent="HUD/MarginContainer/OptionContainer" unique_id=1011685911]
 layout_mode = 2

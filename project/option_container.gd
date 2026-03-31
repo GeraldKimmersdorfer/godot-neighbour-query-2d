@@ -11,6 +11,7 @@ signal ranges_changed(max_range: float, min_range: float)
 @export var _label_fps: Label
 @export var _label_movement_mode: Label
 @export var _check_button_validation_check: CheckButton
+@export var _dot_container: DotContainer
 
 @export_group("")
 
@@ -45,6 +46,8 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_M:
 			movement_mode = (movement_mode + 1) % Dot.MovementMode.size() as Dot.MovementMode
+		elif event.keycode == KEY_B:
+			_run_benchmark()
 	if event is InputEventMouseButton:
 		if event.ctrl_pressed:
 			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -56,6 +59,10 @@ func _input(event: InputEvent) -> void:
 				query_max_range = maxf(query_max_range + 5.0, query_min_range)
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 				query_max_range = maxf(query_max_range - 5.0, query_min_range + 10.0)
+
+func _run_benchmark() -> void:
+	var report := await _dot_container.start_benchmark(5000, DotContainer.InitPlacementMode.DENSITY_TEXTURE_BASED, Dot.MovementMode.NONE, 20.0)
+	print(report)
 
 func _process(_delta: float) -> void:
 	if _label_fps:
