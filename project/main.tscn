@@ -24,12 +24,13 @@ _info_label = NodePath("../HUD/MarginContainer/DebugInfoLabel")
 _nq2d = NodePath("../NeighbourQuery2D")
 _option_container = NodePath("../HUD/MarginContainer/OptionContainer")
 dot_template = ExtResource("2_0xm2m")
-dot_count = 2000
+dot_count = 5000
 
 [node name="NeighbourQuery2D" type="NeighbourQuery2D" parent="." unique_id=1303969294]
 grid_size = 64
 use_global_position = false
 domain = Rect2(0, 0, 1400, 900)
+debug_draw_heatmap_intervall = -1.0
 debug_heatmap_mode = 1
 z_index = -1
 

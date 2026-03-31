@@ -2,14 +2,16 @@ extends Node2D
 
 class_name DotQueryNode
 
-const SPEED: float = 120.0
 const CLOSEST_COUNT: int = 5
+const BASE_FREQ: float = 0.5  ## radians per second
+const LISSAJOUS_TIME_OFFSETS = [0.0, 15, 30, 45, 60]
+const LISSAJOUS_FREQS = [Vector2(1, 2), Vector2(1, 3), Vector2(2, 3), Vector2(3, 4), Vector2(2, 5)]
 const COLORS = [
-	Color(1.0, 0.5, 0.0),  # GET_ALL - orange
-	Color(0.0, 0.9, 0.0),  # GET_NEXT - green
-	Color(0.0, 0.7, 1.0),  # GET_CLOSEST - cyan
-	Color(0.9, 0.0, 1.0),  # GET_RANDOM - magenta
-	Color(1.0, 0.9, 0.0),  # GET_NEXT_FIRST - yellow
+	Color(1.0, 0.5, 0.0),
+	Color(0.0, 0.9, 0.0),
+	Color(0.0, 0.7, 1.0), 
+	Color(0.9, 0.0, 1.0), 
+	Color(1.0, 0.9, 0.0), 
 ]
 
 enum QueryFunc { GET_ALL, GET_NEXT, GET_CLOSEST, GET_RANDOM, GET_NEXT_FIRST }
@@ -29,12 +31,11 @@ enum QueryFunc { GET_ALL, GET_NEXT, GET_CLOSEST, GET_RANDOM, GET_NEXT_FIRST }
 @export var bounds: Rect2
 @export var nq2d: NeighbourQuery2D
 
-var velocity: Vector2
+var _time: float = 0.0
 var _highlighted: Array = []
 
 func _ready() -> void:
-	var angle := randf() * TAU
-	velocity = Vector2(cos(angle), sin(angle)) * SPEED
+	_time = LISSAJOUS_TIME_OFFSETS[query_func]
 
 func _exit_tree() -> void:
 	for dot in _highlighted:
@@ -42,13 +43,12 @@ func _exit_tree() -> void:
 			dot.remove_highlight(self)
 
 func _process(delta: float) -> void:
-	position += velocity * delta
-	if position.x < bounds.position.x or position.x > bounds.end.x:
-		velocity.x = -velocity.x
-		position.x = clamp(position.x, bounds.position.x, bounds.end.x)
-	if position.y < bounds.position.y or position.y > bounds.end.y:
-		velocity.y = -velocity.y
-		position.y = clamp(position.y, bounds.position.y, bounds.end.y)
+	_time += delta
+	var freq: Vector2 = (LISSAJOUS_FREQS[query_func] as Vector2).normalized() * BASE_FREQ
+	var amplitude := bounds.size * 0.45
+	position = bounds.get_center() + Vector2(
+		amplitude.x * cos(freq.x * _time),
+		amplitude.y * sin(freq.y * _time))
 
 func _physics_process(_delta: float) -> void:
 	for dot in _highlighted:
@@ -70,7 +70,7 @@ func _physics_process(_delta: float) -> void:
 			var r = nq2d.get_next_first(position, query_max_range, query_min_range, Dot.LAYER_ACTIVE)
 			if r: result = [r]
 
-	var color: Color = COLORS[query_func]
+	var color := COLORS[query_func] as Color
 	_highlighted.clear()
 	for dot in result:
 		if is_instance_valid(dot):
@@ -78,8 +78,7 @@ func _physics_process(_delta: float) -> void:
 			_highlighted.append(dot)
 
 func _draw() -> void:
-	var color: Color = COLORS[query_func]
+	var color := COLORS[query_func] as Color
 	draw_arc(Vector2.ZERO, query_max_range, 0.0, TAU, 64, color, 2)
 	if query_min_range > 0.0:
 		draw_arc(Vector2.ZERO, query_min_range, 0.0, TAU, 64, Color(color.r, color.g, color.b, 0.7), 2)
-	draw_circle(Vector2.ZERO, 4.0, color)
