@@ -3,7 +3,7 @@
 #ifdef DEBUG_ENABLED
 #define DEBUG_INFORMATION 1
 #else
-#define DEBUG_INFORMATION 0
+#define DEBUG_INFORMATION 1
 #endif
 
 #include <godot_cpp/classes/node.hpp>
