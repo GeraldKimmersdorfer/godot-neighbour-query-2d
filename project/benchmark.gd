@@ -4,11 +4,11 @@ class_name Benchmark
 const ROW_KEYS := ["get_closest", "get_all", "get_next", "get_random", "get_next_first", "refresh"]
 const ATTR_KEYS := ["count", "placement", "movement", "time", "speed"]
 const RUNS := [
-	{"count": 5000, "placement": DotContainer.InitPlacementMode.DENSITY_TEXTURE_BASED, "movement": Dot.MovementMode.NONE,     "time": 20.0, "speed": 3.0},
-	{"count": 500,  "placement": DotContainer.InitPlacementMode.DENSITY_TEXTURE_BASED, "movement": Dot.MovementMode.NONE,     "time": 20.0, "speed": 3.0},
-	{"count": 0,    "placement": DotContainer.InitPlacementMode.DENSITY_TEXTURE_BASED, "movement": Dot.MovementMode.NONE,     "time": 20.0, "speed": 3.0},
-	{"count": 5000, "placement": DotContainer.InitPlacementMode.UNIFORM,               "movement": Dot.MovementMode.NONE,     "time": 20.0, "speed": 3.0},
-	{"count": 5000, "placement": DotContainer.InitPlacementMode.UNIFORM,               "movement": Dot.MovementMode.STRAIGHT, "time": 20.0, "speed": 3.0},
+	{"count": 5000, "placement": DotContainer.InitPlacementMode.DENSITY_TEXTURE_BASED, "movement": Dot.MovementMode.NONE,     "time": 5.0, "speed": 3.0},
+	{"count": 500,  "placement": DotContainer.InitPlacementMode.DENSITY_TEXTURE_BASED, "movement": Dot.MovementMode.NONE,     "time": 5.0, "speed": 3.0},
+	{"count": 0,    "placement": DotContainer.InitPlacementMode.DENSITY_TEXTURE_BASED, "movement": Dot.MovementMode.NONE,     "time": 5.0, "speed": 3.0},
+	{"count": 5000, "placement": DotContainer.InitPlacementMode.UNIFORM,               "movement": Dot.MovementMode.NONE,     "time": 5.0, "speed": 3.0},
+	{"count": 5000, "placement": DotContainer.InitPlacementMode.UNIFORM,               "movement": Dot.MovementMode.STRAIGHT, "time": 5.0, "speed": 3.0},
 ]
 
 static func run_benchmark(dot_container: DotContainer) -> void:

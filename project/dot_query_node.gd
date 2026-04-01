@@ -3,7 +3,7 @@ extends Node2D
 class_name DotQueryNode
 
 const CLOSEST_COUNT: int = 5
-const BASE_FREQ: float = 1.0  ## radians per second
+const BASE_FREQ: float = 0.1  ## radians per second
 const LISSAJOUS_TIME_OFFSETS = [0.0, 15, 30, 45, 60]
 const LISSAJOUS_FREQS = [Vector2(4, 5), Vector2(4, 5), Vector2(4, 5), Vector2(4, 5), Vector2(4, 5)]
 const COLORS = [

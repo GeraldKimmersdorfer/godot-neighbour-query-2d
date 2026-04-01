@@ -275,7 +275,7 @@ void NeighbourQuery2D::refresh() {
 
 	// Clear build buffer in-place (keeps per-cell capacity to avoid repeated reallocations).
 	for (auto &cell : m_grid_build) {
-		cell.clear();
+		cell.entries.clear();
 	}
 
 	{
@@ -293,7 +293,7 @@ void NeighbourQuery2D::refresh() {
 					if (!is_cell_in_bounds(cx, cy)) {
 						continue;
 					}
-					m_grid_build[to_cell_index(cx, cy)].push_back(GridEntry{ sub.node, sub.node_instance_id, sub.layer, pos });
+					m_grid_build[to_cell_index(cx, cy)].entries.push_back(GridEntry{ sub.node, sub.node_instance_id, sub.layer, pos });
 				}
 			} else {
 				// Shared entity group: one get_position() call for all members.
@@ -311,10 +311,27 @@ void NeighbourQuery2D::refresh() {
 					if (!is_cell_in_bounds(cx, cy)) {
 						continue;
 					}
-					m_grid_build[to_cell_index(cx, cy)].push_back(GridEntry{ sub.node, sub.node_instance_id, sub.layer, pos });
+					m_grid_build[to_cell_index(cx, cy)].entries.push_back(GridEntry{ sub.node, sub.node_instance_id, sub.layer, pos });
 				}
 			}
 		}
+	}
+
+	// Build per-cell AABBs for early discard in queries.
+	for (auto &cell : m_grid_build) {
+		if (cell.entries.empty()) {
+			continue;
+		}
+		Vector2 mn = cell.entries[0].position;
+		Vector2 mx = mn;
+		for (size_t i = 1; i < cell.entries.size(); i++) {
+			const Vector2 &p = cell.entries[i].position;
+			if (p.x < mn.x) mn.x = p.x;
+			if (p.y < mn.y) mn.y = p.y;
+			if (p.x > mx.x) mx.x = p.x;
+			if (p.y > mx.y) mx.y = p.y;
+		}
+		cell.aabb = Rect2(mn, mx - mn);
 	}
 
 	std::swap(m_grid, m_grid_build);
@@ -389,11 +406,7 @@ Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_d
 #endif
 
 	// NOTE: Cap max_distance to guarantee loop termination.
-	// dist-to-center + diagonal is a safe upper bound for the farthest reachable point in the domain.
-	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
-	if (p_max_distance > upper_bound) {
-		p_max_distance = upper_bound;
-	}
+	p_max_distance = clamp_query_range(p_position, p_max_distance);
 
 	float best_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
@@ -405,10 +418,17 @@ Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_d
 			return;
 		}
 		const int cell_idx = to_cell_index(cx, cy);
+		const GridCell &cell = m_grid[cell_idx];
+		if (cell.entries.empty()) {
+			return;
+		}
+		if (cell_aabb_out_of_range(cell, p_position, min_dist_sq, best_dist_sq)) {
+			return;
+		}
 #if DEBUG_INFORMATION
 		m_grid_cellreads_debug[cell_idx]++;
 #endif
-		for (const GridEntry &s : m_grid[cell_idx]) {
+		for (const GridEntry &s : cell.entries) {
 			if ((s.layer & p_layer_mask) == 0) {
 				continue;
 			}
@@ -480,8 +500,7 @@ Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_cou
 	}
 #endif
 
-	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
-	float range = std::min(p_max_distance, upper_bound);
+	float range = clamp_query_range(p_position, p_max_distance);
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
@@ -494,10 +513,17 @@ Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_cou
 	for (int cy = min_cy; cy <= max_cy; cy++) {
 		for (int cx = min_cx; cx <= max_cx; cx++) {
 			const int cell_idx = to_cell_index(cx, cy);
+			const GridCell &cell = m_grid[cell_idx];
+			if (cell.entries.empty()) {
+				continue;
+			}
+			if (cell_aabb_out_of_range(cell, p_position, min_dist_sq, max_dist_sq)) {
+				continue;
+			}
 #if DEBUG_INFORMATION
 			m_grid_cellreads_debug[cell_idx]++;
 #endif
-			for (const GridEntry &s : m_grid[cell_idx]) {
+			for (const GridEntry &s : cell.entries) {
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
@@ -555,10 +581,7 @@ Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p
 	}
 #endif
 
-	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
-	if (p_max_distance > upper_bound) {
-		p_max_distance = upper_bound;
-	}
+	p_max_distance = clamp_query_range(p_position, p_max_distance);
 
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
@@ -570,10 +593,17 @@ Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p
 			return nullptr;
 		}
 		const int cell_idx = to_cell_index(cx, cy);
+		const GridCell &cell = m_grid[cell_idx];
+		if (cell.entries.empty()) {
+			return nullptr;
+		}
+		if (cell_aabb_out_of_range(cell, p_position, min_dist_sq, max_dist_sq)) {
+			return nullptr;
+		}
 #if DEBUG_INFORMATION
 		m_grid_cellreads_debug[cell_idx]++;
 #endif
-		for (const GridEntry &s : m_grid[cell_idx]) {
+		for (const GridEntry &s : cell.entries) {
 			if ((s.layer & p_layer_mask) == 0) {
 				continue;
 			}
@@ -640,8 +670,7 @@ Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_dist
 #endif
 
 	// Cap to domain bounds to avoid overflow in cell range computation when p_max_distance is very large.
-	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
-	float range = std::min(p_max_distance, upper_bound);
+	float range = clamp_query_range(p_position, p_max_distance);
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
@@ -654,12 +683,19 @@ Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_dist
 	for (int cy = min_cy; cy <= max_cy; cy++) {
 		for (int cx = min_cx; cx <= max_cx; cx++) {
 			const int cell_idx = to_cell_index(cx, cy);
+			const GridCell &cell = m_grid[cell_idx];
+			if (cell.entries.empty()) {
+				continue;
+			}
+			if (cell_aabb_out_of_range(cell, p_position, min_dist_sq, max_dist_sq)) {
+				continue;
+			}
 #if DEBUG_INFORMATION
 			m_grid_cellreads_debug[cell_idx]++;
 #endif
 			// NOTE: I already tried having template functions with static ifs to completely remove checks like validity, min distance,
 			// and so on from the hot loop. It did not yield any significant change to the execution time. (same for the other get_ functions)
-			for (const GridEntry &s : m_grid[cell_idx]) {
+			for (const GridEntry &s : cell.entries) {
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
@@ -709,10 +745,7 @@ Array NeighbourQuery2D::get_closest_grid(const Vector2 &p_position, int p_max_co
 	}
 #endif
 
-	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
-	if (p_max_distance > upper_bound) {
-		p_max_distance = upper_bound;
-	}
+	p_max_distance = clamp_query_range(p_position, p_max_distance);
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
@@ -722,10 +755,17 @@ Array NeighbourQuery2D::get_closest_grid(const Vector2 &p_position, int p_max_co
 			return;
 		}
 		const int cell_idx = to_cell_index(cx, cy);
+		const GridCell &cell = m_grid[cell_idx];
+		if (cell.entries.empty()) {
+			return;
+		}
+		if (cell_aabb_out_of_range(cell, p_position, min_dist_sq, max_dist_sq)) {
+			return;
+		}
 #if DEBUG_INFORMATION
 		m_grid_cellreads_debug[cell_idx]++;
 #endif
-		for (const GridEntry &s : m_grid[cell_idx]) {
+		for (const GridEntry &s : cell.entries) {
 			if ((s.layer & p_layer_mask) == 0) {
 				continue;
 			}
