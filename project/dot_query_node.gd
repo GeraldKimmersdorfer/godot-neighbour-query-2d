@@ -3,9 +3,9 @@ extends Node2D
 class_name DotQueryNode
 
 const CLOSEST_COUNT: int = 5
-const BASE_FREQ: float = 0.5  ## radians per second
+const BASE_FREQ: float = 1.0  ## radians per second
 const LISSAJOUS_TIME_OFFSETS = [0.0, 15, 30, 45, 60]
-const LISSAJOUS_FREQS = [Vector2(1, 2), Vector2(1, 3), Vector2(2, 3), Vector2(3, 4), Vector2(2, 5)]
+const LISSAJOUS_FREQS = [Vector2(4, 5), Vector2(4, 5), Vector2(4, 5), Vector2(4, 5), Vector2(4, 5)]
 const COLORS = [
 	Color(1.0, 0.5, 0.0),
 	Color(0.0, 0.9, 0.0),
@@ -30,6 +30,7 @@ enum QueryFunc { GET_ALL, GET_NEXT, GET_CLOSEST, GET_RANDOM, GET_NEXT_FIRST }
 		queue_redraw()
 @export var bounds: Rect2
 @export var nq2d: NeighbourQuery2D
+var speed: float = BASE_FREQ
 
 var _time: float = 0.0
 var _highlighted: Array = []
@@ -44,7 +45,7 @@ func _exit_tree() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
-	var freq: Vector2 = (LISSAJOUS_FREQS[query_func] as Vector2).normalized() * BASE_FREQ
+	var freq: Vector2 = (LISSAJOUS_FREQS[query_func] as Vector2).normalized() * speed
 	var amplitude := bounds.size * 0.45
 	position = bounds.get_center() + Vector2(
 		amplitude.x * cos(freq.x * _time),

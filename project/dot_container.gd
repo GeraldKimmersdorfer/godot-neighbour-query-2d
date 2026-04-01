@@ -7,12 +7,12 @@ class_name DotContainer
 @export var _nq2d: NeighbourQuery2D
 @export var _option_container: OptionContainer
 
-enum InitPlacementMode { RANDOM, DENSITY_TEXTURE_BASED }
+enum InitPlacementMode { UNIFORM, DENSITY_TEXTURE_BASED }
 
 @export_group("")
 @export var dot_template: PackedScene
 @export var dot_count: int = 1000
-@export var placement_mode: InitPlacementMode = InitPlacementMode.RANDOM:
+@export var placement_mode: InitPlacementMode = InitPlacementMode.UNIFORM:
 	set(value):
 		placement_mode = value
 		queue_redraw()
@@ -57,7 +57,7 @@ func _get_spawn_position() -> Vector2:
 	var bounds: Rect2 = _nq2d.domain
 	if placement_mode == InitPlacementMode.DENSITY_TEXTURE_BASED and density_texture and not _density_image:
 		_density_image = density_texture.get_image()
-	if placement_mode == InitPlacementMode.RANDOM or not _density_image:
+	if placement_mode == InitPlacementMode.UNIFORM or not _density_image:
 		return Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
 	for _i in 100:
 		var pos := Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
@@ -111,7 +111,7 @@ func _physics_process(_delta: float) -> void:
 	if Engine.is_editor_hint(): return
 	_validation_test()
 
-func start_benchmark(node_count: int, p_placement_mode: InitPlacementMode, p_movement_mode: Dot.MovementMode, benchmark_time: float) -> String:
+func start_benchmark(node_count: int, p_placement_mode: InitPlacementMode, p_movement_mode: Dot.MovementMode, benchmark_time: float, query_node_speed: float = DotQueryNode.BASE_FREQ) -> String:
 	for dot in _dots:
 		dot.queue_free()
 	_dots.clear()
@@ -121,6 +121,7 @@ func start_benchmark(node_count: int, p_placement_mode: InitPlacementMode, p_mov
 	update_movement_for_all(p_movement_mode)
 	for qn in _query_nodes:
 		qn._time = DotQueryNode.LISSAJOUS_TIME_OFFSETS[qn.query_func]
+		qn.speed = query_node_speed
 	var original_interval: float = _nq2d.debug_report_interval
 	_nq2d.debug_report_interval = 0.0
 	await _wait_for_debug_report()

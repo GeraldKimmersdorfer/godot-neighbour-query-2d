@@ -61,9 +61,7 @@ func _input(event: InputEvent) -> void:
 				query_max_range = maxf(query_max_range - 5.0, query_min_range + 10.0)
 
 func _run_benchmark() -> void:
-	var report := await _dot_container.start_benchmark(5000, DotContainer.InitPlacementMode.DENSITY_TEXTURE_BASED, Dot.MovementMode.NONE, 20.0)
-	print(report)
+	await Benchmark.run_benchmark(_dot_container)
 
 func _process(_delta: float) -> void:
-	if _label_fps:
-		_label_fps.text = "FPS: %d" % Engine.get_frames_per_second()
+	_label_fps.text = "FPS: %d" % Engine.get_frames_per_second()
