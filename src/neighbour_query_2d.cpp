@@ -415,10 +415,7 @@ Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_d
 		}
 		const int cell_idx = to_cell_index(cx, cy);
 		const GridCell &cell = m_grid[cell_idx];
-		if (cell.entries.empty()) {
-			return;
-		}
-		if (cell_aabb_out_of_range(cell, p_position, min_dist_sq, best_dist_sq)) {
+		if (cell.early_discard_check(p_position, min_dist_sq, best_dist_sq)) {
 			return;
 		}
 #if DEBUG_INFORMATION
@@ -508,10 +505,7 @@ Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_cou
 		for (int cx = cr.min_x; cx <= cr.max_x; cx++) {
 			const int cell_idx = to_cell_index(cx, cy);
 			const GridCell &cell = m_grid[cell_idx];
-			if (cell.entries.empty()) {
-				continue;
-			}
-			if (cell_aabb_out_of_range(cell, p_position, min_dist_sq, max_dist_sq)) {
+			if (cell.early_discard_check(p_position, min_dist_sq, max_dist_sq)) {
 				continue;
 			}
 #if DEBUG_INFORMATION
@@ -588,10 +582,7 @@ Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p
 		}
 		const int cell_idx = to_cell_index(cx, cy);
 		const GridCell &cell = m_grid[cell_idx];
-		if (cell.entries.empty()) {
-			return nullptr;
-		}
-		if (cell_aabb_out_of_range(cell, p_position, min_dist_sq, max_dist_sq)) {
+		if (cell.early_discard_check(p_position, min_dist_sq, max_dist_sq)) {
 			return nullptr;
 		}
 #if DEBUG_INFORMATION
@@ -674,10 +665,7 @@ Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_dist
 		for (int cx = cr.min_x; cx <= cr.max_x; cx++) {
 			const int cell_idx = to_cell_index(cx, cy);
 			const GridCell &cell = m_grid[cell_idx];
-			if (cell.entries.empty()) {
-				continue;
-			}
-			if (cell_aabb_out_of_range(cell, p_position, min_dist_sq, max_dist_sq)) {
+			if (cell.early_discard_check(p_position, min_dist_sq, max_dist_sq)) {
 				continue;
 			}
 #if DEBUG_INFORMATION
@@ -746,10 +734,7 @@ Array NeighbourQuery2D::get_closest_grid(const Vector2 &p_position, int p_max_co
 		}
 		const int cell_idx = to_cell_index(cx, cy);
 		const GridCell &cell = m_grid[cell_idx];
-		if (cell.entries.empty()) {
-			return;
-		}
-		if (cell_aabb_out_of_range(cell, p_position, min_dist_sq, max_dist_sq)) {
+		if (cell.early_discard_check(p_position, min_dist_sq, max_dist_sq)) {
 			return;
 		}
 #if DEBUG_INFORMATION
