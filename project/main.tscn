@@ -24,6 +24,32 @@ expand_margin_top = 10.0
 expand_margin_right = 10.0
 expand_margin_bottom = 10.0
 
+[sub_resource type="SystemFont" id="SystemFont_h2yge"]
+font_names = PackedStringArray("Monospace")
+font_weight = 600
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1bvp3"]
+content_margin_left = 5.0
+content_margin_top = 5.0
+content_margin_right = 5.0
+content_margin_bottom = 5.0
+bg_color = Color(0.9490196, 0.003921569, 0.9490196, 0.8627451)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lquwl"]
+content_margin_left = 5.0
+content_margin_top = 5.0
+content_margin_right = 5.0
+content_margin_bottom = 5.0
+bg_color = Color(1, 1, 1, 0.8627451)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
 [sub_resource type="SystemFont" id="SystemFont_0xm2m"]
 font_names = PackedStringArray("Monospace")
 font_weight = 600
@@ -31,11 +57,10 @@ subpixel_positioning = 0
 
 [node name="Main" type="Node" unique_id=244374132]
 
-[node name="DotContainer" type="Node2D" parent="." unique_id=608581577 node_paths=PackedStringArray("_info_label", "_nq2d", "_option_container")]
+[node name="DotContainer" type="Node2D" parent="." unique_id=608581577 node_paths=PackedStringArray("_info_label", "_nq2d")]
 script = ExtResource("1_0xm2m")
 _info_label = NodePath("../HUD/MarginContainer/DebugInfoLabel")
 _nq2d = NodePath("../NeighbourQuery2D")
-_option_container = NodePath("../HUD/MarginContainer/OptionContainer")
 dot_template = ExtResource("2_0xm2m")
 dot_count = 5000
 placement_mode = 1
@@ -45,6 +70,7 @@ density_texture = SubResource("NoiseTexture2D_h2yge")
 grid_size = 64
 use_global_position = false
 domain = Rect2(0, 0, 1400, 900)
+debug_draw_domain = false
 z_index = -1
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=451879680]
@@ -60,18 +86,20 @@ theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_min_range_label", "_max_range_label", "_label_fps", "_label_movement_mode", "_check_button_validation_check", "_dot_container")]
+[node name="OptionContainer" type="PanelContainer" parent="HUD/MarginContainer" unique_id=1012802297 node_paths=PackedStringArray("_fps_label", "_dots_label", "_init_placement_label", "_move_mode_label", "_query_range_label", "_query_ms_label", "_dot_container", "_nq2d")]
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_h2yge")
 script = ExtResource("3_h2yge")
-_min_range_label = NodePath("GridContainer/MinRangeLabel")
-_max_range_label = NodePath("GridContainer/MaxRangeLabel")
-_label_fps = NodePath("GridContainer/FPSLabel")
-_label_movement_mode = NodePath("GridContainer/MovementModeLabel")
-_check_button_validation_check = NodePath("GridContainer/ValCheckEnabled")
+_fps_label = NodePath("GridContainer/FPSLabel")
+_dots_label = NodePath("GridContainer/DotsLabel")
+_init_placement_label = NodePath("GridContainer/InitPlacementLabel")
+_move_mode_label = NodePath("GridContainer/MoveModeLabel")
+_query_range_label = NodePath("GridContainer/QueryRangeLabel")
+_query_ms_label = NodePath("GridContainer/QueryMSLabel")
 _dot_container = NodePath("../../../DotContainer")
+_nq2d = NodePath("../../../NeighbourQuery2D")
 
 [node name="GridContainer" type="GridContainer" parent="HUD/MarginContainer/OptionContainer" unique_id=1011685911]
 layout_mode = 2
@@ -90,55 +118,83 @@ text = "60"
 [node name="Placeholder" type="Control" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=930796508]
 layout_mode = 2
 
-[node name="MovementModeAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1240469463]
+[node name="DotsAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=697045947]
+layout_mode = 2
+text = "Dots:"
+
+[node name="DotsLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=481094492]
+layout_mode = 2
+text = "5000"
+
+[node name="DotsHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1543686339]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0, 1, 1)
+theme_override_fonts/font = SubResource("SystemFont_h2yge")
+text = "[+-]"
+
+[node name="InitPlacementAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=797941469]
+layout_mode = 2
+text = "Init-Placement:"
+
+[node name="InitPlacementLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1698588774]
+layout_mode = 2
+text = "UNIFORM"
+
+[node name="InitPlacementHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=675328360]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0, 1, 1)
+theme_override_fonts/font = SubResource("SystemFont_h2yge")
+text = "[I]"
+
+[node name="MoveModeAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1240469463]
 layout_mode = 2
 text = "Move-Mode:"
 
-[node name="MovementModeLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1083158633]
+[node name="MoveModeLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1083158633]
 layout_mode = 2
 text = "BOID"
 
-[node name="MovementModeHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=2081215019]
+[node name="MoveModeHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=2081215019]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0, 1, 1)
+theme_override_fonts/font = SubResource("SystemFont_h2yge")
 text = "[M]"
 
-[node name="MinRangeAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=558835862]
+[node name="QueryRangeAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=558835862]
 layout_mode = 2
-text = "Min-Range:"
+text = "Query-Range:"
 
-[node name="MinRangeLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=111469668]
+[node name="QueryRangeLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=111469668]
 layout_mode = 2
-text = "Min-Range:"
+text = "100 / 120 px"
 
-[node name="MinRangeHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1103541635]
+[node name="QueryRangeHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1103541635]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0, 1, 1)
-text = "[Strg + whell]"
+theme_override_fonts/font = SubResource("SystemFont_h2yge")
+text = "[whell] /+[Ctr]"
 
-[node name="MaxRangeAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=940753045]
+[node name="QueryMS" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=2095338161]
 layout_mode = 2
-text = "Max-Range:"
+text = "Query-MS:"
 
-[node name="MaxRangeLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=2021386563]
+[node name="QueryMSLabel" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1732786302]
 layout_mode = 2
-text = "Min-Range:"
+text = "0.5 rad/s"
 
-[node name="MaxRangeHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=942080262]
+[node name="QueryMSHint" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=2108153975]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0, 1, 1)
-text = "[whell]"
+theme_override_fonts/font = SubResource("SystemFont_h2yge")
+text = "[Alt + whell]"
 
-[node name="ValCheckAnz" type="Label" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=466418311]
+[node name="RunBenchmarksButton" type="Button" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1107732664]
 layout_mode = 2
-text = "Validation-Check:"
-
-[node name="ValCheckEnabled" type="CheckButton" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1959444444]
-layout_mode = 2
-size_flags_horizontal = 0
-
-[node name="Placeholder2" type="Control" parent="HUD/MarginContainer/OptionContainer/GridContainer" unique_id=1876377537]
-layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_hover_color = Color(0, 0, 0, 1)
+theme_override_styles/normal = SubResource("StyleBoxFlat_1bvp3")
+theme_override_styles/hover = SubResource("StyleBoxFlat_lquwl")
+text = "Run Benchmarks"
 
 [node name="DebugInfoLabel" type="Label" parent="HUD/MarginContainer" unique_id=524208133]
 z_index = 1
@@ -149,4 +205,4 @@ theme_override_fonts/font = SubResource("SystemFont_0xm2m")
 theme_override_styles/normal = SubResource("StyleBoxFlat_h2yge")
 text = "DebugInfo"
 
-[connection signal="movement_mode_changed" from="HUD/MarginContainer/OptionContainer" to="DotContainer" method="update_movement_for_all"]
+[connection signal="button_down" from="HUD/MarginContainer/OptionContainer/GridContainer/RunBenchmarksButton" to="HUD/MarginContainer/OptionContainer" method="run_benchmark"]

@@ -32,24 +32,27 @@ enum QueryFunc { GET_ALL, GET_NEXT, GET_CLOSEST, GET_RANDOM, GET_NEXT_FIRST }
 @export var nq2d: NeighbourQuery2D
 var speed: float = BASE_FREQ
 
-var _time: float = 0.0
+var _phase: Vector2 = Vector2.ZERO
 var _highlighted: Array = []
 
 func _ready() -> void:
-	_time = LISSAJOUS_TIME_OFFSETS[query_func]
+	_reset_phase(BASE_FREQ)
 
 func _exit_tree() -> void:
 	for dot in _highlighted:
 		if is_instance_valid(dot):
 			dot.remove_highlight(self)
 
+func _reset_phase(p_speed: float) -> void:
+	var freq: Vector2 = (LISSAJOUS_FREQS[query_func] as Vector2).normalized() * p_speed
+	_phase = freq * LISSAJOUS_TIME_OFFSETS[query_func]
+
 func _process(delta: float) -> void:
-	_time += delta
-	var freq: Vector2 = (LISSAJOUS_FREQS[query_func] as Vector2).normalized() * speed
+	_phase += (LISSAJOUS_FREQS[query_func] as Vector2).normalized() * speed * delta
 	var amplitude := bounds.size * 0.45
 	position = bounds.get_center() + Vector2(
-		amplitude.x * cos(freq.x * _time),
-		amplitude.y * sin(freq.y * _time))
+		amplitude.x * cos(_phase.x),
+		amplitude.y * sin(_phase.y))
 
 func _physics_process(_delta: float) -> void:
 	for dot in _highlighted:

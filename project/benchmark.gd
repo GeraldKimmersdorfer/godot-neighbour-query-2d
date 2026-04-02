@@ -3,16 +3,19 @@ class_name Benchmark
 
 const ROW_KEYS := ["get_closest", "get_all", "get_next", "get_random", "get_next_first", "refresh"]
 const ATTR_KEYS := ["count", "placement", "movement", "time", "speed"]
-const BENCHMARK_TIME_EACH := 20.0
+const BENCHMARK_TIME_EACH := 5.0
+const QUERY_NODE_SPEED_EACH := 3.0
 const RUNS := [
-	{"count": 5000, "placement": DotContainer.InitPlacementMode.DENSITY_TEXTURE_BASED, "movement": Dot.MovementMode.NONE,     "time": BENCHMARK_TIME_EACH, "speed": 3.0},
-	{"count": 500,  "placement": DotContainer.InitPlacementMode.DENSITY_TEXTURE_BASED, "movement": Dot.MovementMode.NONE,     "time": BENCHMARK_TIME_EACH, "speed": 3.0},
-	{"count": 0,    "placement": DotContainer.InitPlacementMode.DENSITY_TEXTURE_BASED, "movement": Dot.MovementMode.NONE,     "time": BENCHMARK_TIME_EACH, "speed": 3.0},
-	{"count": 5000, "placement": DotContainer.InitPlacementMode.UNIFORM,               "movement": Dot.MovementMode.NONE,     "time": BENCHMARK_TIME_EACH, "speed": 3.0},
-	{"count": 5000, "placement": DotContainer.InitPlacementMode.UNIFORM,               "movement": Dot.MovementMode.STRAIGHT, "time": BENCHMARK_TIME_EACH, "speed": 3.0},
+	{"count": 5000, "placement": DotContainer.InitPlacementMode.DENSITY, "movement": Dot.MovementMode.NONE,     "time": BENCHMARK_TIME_EACH, "speed": QUERY_NODE_SPEED_EACH},
+	{"count": 500,  "placement": DotContainer.InitPlacementMode.DENSITY, "movement": Dot.MovementMode.NONE,     "time": BENCHMARK_TIME_EACH, "speed": QUERY_NODE_SPEED_EACH},
+	{"count": 0,    "placement": DotContainer.InitPlacementMode.UNIFORM,               "movement": Dot.MovementMode.NONE,     "time": BENCHMARK_TIME_EACH, "speed": QUERY_NODE_SPEED_EACH},
+	{"count": 5000, "placement": DotContainer.InitPlacementMode.UNIFORM,               "movement": Dot.MovementMode.NONE,     "time": BENCHMARK_TIME_EACH, "speed": QUERY_NODE_SPEED_EACH},
+	{"count": 5000, "placement": DotContainer.InitPlacementMode.UNIFORM,               "movement": Dot.MovementMode.STRAIGHT, "time": BENCHMARK_TIME_EACH, "speed": QUERY_NODE_SPEED_EACH},
 ]
 
-static func run_benchmark(dot_container: DotContainer) -> void:
+static func run_benchmark(option_container: OptionContainer) -> void:
+	var saved_state: Dictionary = option_container.get_state()
+
 	# Split attrs into common (same across all runs) and varying
 	var common := {}
 	var varying := []
@@ -38,17 +41,19 @@ static func run_benchmark(dot_container: DotContainer) -> void:
 
 	var results: Array[Dictionary] = []
 	for run in RUNS:
-		var report: String = await dot_container.start_benchmark(run["count"], run["placement"], run["movement"], run["time"], run["speed"])
+		var report: String = await option_container.run_single_benchmark(run["count"], run["placement"], run["movement"], run["time"], run["speed"])
 		results.append(_parse_report(report))
 
+	option_container.restore_state(saved_state)
+
 	var output := _build_description(common) + _build_table(labels, results)
-	print("[Benchmark] Done -> Result copied to clipboard.")
 	DisplayServer.clipboard_set(output)
+	OS.alert("Benchmark complete. Results copied to clipboard.", "Benchmark")
 
 static func _attr_str(attr: String, val) -> String:
 	match attr:
 		"count":     return str(val)
-		"placement": return DotContainer.InitPlacementMode.keys()[val].replace("_TEXTURE_BASED", "")
+		"placement": return DotContainer.InitPlacementMode.keys()[val]
 		"movement":  return Dot.MovementMode.keys()[val]
 		"time":      return "%.0fs" % val
 		"speed":     return "%.2f rad/s" % val
