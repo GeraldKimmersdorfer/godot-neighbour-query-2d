@@ -331,7 +331,7 @@ void NeighbourQuery2D::refresh() {
 			if (p.x > mx.x) mx.x = p.x;
 			if (p.y > mx.y) mx.y = p.y;
 		}
-		cell.aabb = Rect2(mn, mx - mn);
+		cell.aabb = { mn, mx };
 	}
 
 	std::swap(m_grid, m_grid_build);

@@ -60,9 +60,14 @@ struct GridEntry {
 	Vector2 position;
 };
 
+struct AABB2 {
+	Vector2 min;
+	Vector2 max;
+};
+
 struct GridCell {
 	std::vector<GridEntry> entries;
-	Rect2 aabb; // tight bounding box of all entry positions; valid only when entries is non-empty
+	AABB2 aabb; // tight bounding box of all entry positions; valid only when entries is non-empty
 };
 
 class NeighbourQuery2D : public Node2D {
@@ -129,15 +134,15 @@ private:
 	// Returns true if the cell's AABB is entirely outside [min_dist_sq, max_dist_sq]. All entries can be safely skipped.
 	inline bool cell_aabb_out_of_range(const GridCell &cell, const Vector2 &p_position, float min_dist_sq, float max_dist_sq) const {
 		// Closest point on AABB — if beyond max, the whole cell is too far.
-		float ax = std::clamp(p_position.x, cell.aabb.position.x, cell.aabb.position.x + cell.aabb.size.x);
-		float ay = std::clamp(p_position.y, cell.aabb.position.y, cell.aabb.position.y + cell.aabb.size.y);
+		float ax = std::clamp(p_position.x, cell.aabb.min.x, cell.aabb.max.x);
+		float ay = std::clamp(p_position.y, cell.aabb.min.y, cell.aabb.max.y);
 		float adx = ax - p_position.x, ady = ay - p_position.y;
 		if (adx * adx + ady * ady > max_dist_sq) {
 			return true;
 		}
 		// Farthest point on AABB (always a corner) — if still within min, the whole cell is too close.
-		float fdx = std::max(std::abs(p_position.x - cell.aabb.position.x), std::abs(p_position.x - (cell.aabb.position.x + cell.aabb.size.x)));
-		float fdy = std::max(std::abs(p_position.y - cell.aabb.position.y), std::abs(p_position.y - (cell.aabb.position.y + cell.aabb.size.y)));
+		float fdx = std::max(std::abs(p_position.x - cell.aabb.min.x), std::abs(p_position.x - cell.aabb.max.x));
+		float fdy = std::max(std::abs(p_position.y - cell.aabb.min.y), std::abs(p_position.y - cell.aabb.max.y));
 		return fdx * fdx + fdy * fdy < min_dist_sq;
 	}
 
