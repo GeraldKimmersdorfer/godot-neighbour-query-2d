@@ -250,10 +250,6 @@ void NeighbourQuery2D::_physics_process(double p_delta) {
 	refresh();
 }
 
-int NeighbourQuery2D::to_cell_index(int cx, int cy) const {
-	return cy * m_grid_cols + cx;
-}
-
 void NeighbourQuery2D::_update_grid_dimensions() {
 	m_grid_cols = std::max(1, static_cast<int>(std::ceil(domain.size.x / grid_size)));
 	m_grid_rows = std::max(1, static_cast<int>(std::ceil(domain.size.y / grid_size)));
@@ -331,7 +327,7 @@ void NeighbourQuery2D::refresh() {
 			if (p.x > mx.x) mx.x = p.x;
 			if (p.y > mx.y) mx.y = p.y;
 		}
-		cell.aabb = { mn, mx };
+		cell.aabb = { mn.x, mn.y, mx.x, mx.y };
 	}
 
 	std::swap(m_grid, m_grid_build);
@@ -500,18 +496,16 @@ Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_cou
 	}
 #endif
 
-	float range = clamp_query_range(p_position, p_max_distance);
+	p_max_distance = clamp_query_range(p_position, p_max_distance);
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
-	int min_cx = std::max(0, static_cast<int>(std::floor((p_position.x - range - domain.position.x) / grid_size)));
-	int max_cx = std::min(m_grid_cols - 1, static_cast<int>(std::floor((p_position.x + range - domain.position.x) / grid_size)));
-	int min_cy = std::max(0, static_cast<int>(std::floor((p_position.y - range - domain.position.y) / grid_size)));
-	int max_cy = std::min(m_grid_rows - 1, static_cast<int>(std::floor((p_position.y + range - domain.position.y) / grid_size)));
-
-	std::vector<const GridEntry *> candidates;
-	for (int cy = min_cy; cy <= max_cy; cy++) {
-		for (int cx = min_cx; cx <= max_cx; cx++) {
+	auto cr = get_cell_range(p_position, p_max_distance);
+	// We use a static candidates vector to avoid unnecessary reallocations/resizing in subsequent queries
+	thread_local static std::vector<const GridEntry *> candidates;
+	candidates.clear();
+	for (int cy = cr.min_y; cy <= cr.max_y; cy++) {
+		for (int cx = cr.min_x; cx <= cr.max_x; cx++) {
 			const int cell_idx = to_cell_index(cx, cy);
 			const GridCell &cell = m_grid[cell_idx];
 			if (cell.entries.empty()) {
@@ -670,18 +664,14 @@ Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_dist
 #endif
 
 	// Cap to domain bounds to avoid overflow in cell range computation when p_max_distance is very large.
-	float range = clamp_query_range(p_position, p_max_distance);
+	p_max_distance = clamp_query_range(p_position, p_max_distance);
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
 
-	int min_cx = std::max(0, static_cast<int>(std::floor((p_position.x - range - domain.position.x) / grid_size)));
-	int max_cx = std::min(m_grid_cols - 1, static_cast<int>(std::floor((p_position.x + range - domain.position.x) / grid_size)));
-	int min_cy = std::max(0, static_cast<int>(std::floor((p_position.y - range - domain.position.y) / grid_size)));
-	int max_cy = std::min(m_grid_rows - 1, static_cast<int>(std::floor((p_position.y + range - domain.position.y) / grid_size)));
-
-	for (int cy = min_cy; cy <= max_cy; cy++) {
-		for (int cx = min_cx; cx <= max_cx; cx++) {
+	auto cr = get_cell_range(p_position, p_max_distance);
+	for (int cy = cr.min_y; cy <= cr.max_y; cy++) {
+		for (int cx = cr.min_x; cx <= cr.max_x; cx++) {
 			const int cell_idx = to_cell_index(cx, cy);
 			const GridCell &cell = m_grid[cell_idx];
 			if (cell.entries.empty()) {
@@ -734,8 +724,8 @@ Array NeighbourQuery2D::get_closest_grid(const Vector2 &p_position, int p_max_co
 	// Using a heap here allows us O(logn) for insert whereas a sorted array would be O(n).
 	using Entry = std::pair<float, Node2D *>;
 	auto cmp = [](const Entry &a, const Entry &b) { return a.first < b.first; };
-	std::vector<Entry> heap;
-	heap.reserve(p_max_count + 1);
+	thread_local static std::vector<Entry> heap;
+	heap.clear();
 
 	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
 	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));

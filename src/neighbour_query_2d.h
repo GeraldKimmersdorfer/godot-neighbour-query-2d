@@ -61,8 +61,11 @@ struct GridEntry {
 };
 
 struct AABB2 {
-	Vector2 min;
-	Vector2 max;
+	real_t min_x, min_y, max_x, max_y;
+};
+
+struct AABB2I {
+	int min_x, min_y, max_x, max_y;
 };
 
 struct GridCell {
@@ -125,28 +128,42 @@ private:
 		return cx >= 0 && cx < m_grid_cols && cy >= 0 && cy < m_grid_rows;
 	}
 
+	// Returns the inclusive grid cell index range that a circle of radius range centered at p_position overlaps.
+	inline AABB2I get_cell_range(const Vector2 &p_position, float range) const {
+		return {
+			std::max(0, static_cast<int>(std::floor((p_position.x - range - domain.position.x) / grid_size))),
+			std::max(0, static_cast<int>(std::floor((p_position.y - range - domain.position.y) / grid_size))),
+			std::min(m_grid_cols - 1, static_cast<int>(std::floor((p_position.x + range - domain.position.x) / grid_size))),
+			std::min(m_grid_rows - 1, static_cast<int>(std::floor((p_position.y + range - domain.position.y) / grid_size)))
+		};
+	}
+
 	// Returns p_max_distance clamped to the farthest reachable point in the domain, to prevent overflow in cell range calculations.
 	inline float clamp_query_range(const Vector2 &p_position, float p_max_distance) const {
 		// dist-to-center + diagonal is a safe upper bound for the farthest reachable point in the domain.
 		return std::min(p_max_distance, p_position.distance_to(m_domain_center) + m_domain_diagonal_half);
 	}
 
-	// Returns true if the cell's AABB is entirely outside [min_dist_sq, max_dist_sq]. All entries can be safely skipped.
+	// Returns true if the Cell is entirely outside [min_dist_sq, max_dist_sq]. All entries can be safely skipped.
 	inline bool cell_aabb_out_of_range(const GridCell &cell, const Vector2 &p_position, float min_dist_sq, float max_dist_sq) const {
-		// Closest point on AABB — if beyond max, the whole cell is too far.
-		float ax = std::clamp(p_position.x, cell.aabb.min.x, cell.aabb.max.x);
-		float ay = std::clamp(p_position.y, cell.aabb.min.y, cell.aabb.max.y);
+		// Closest point on AABB. If that one is beyond max => the whole cell is too far.
+		float ax = std::clamp(p_position.x, cell.aabb.min_x, cell.aabb.max_x);
+		float ay = std::clamp(p_position.y, cell.aabb.min_y, cell.aabb.max_y);
 		float adx = ax - p_position.x, ady = ay - p_position.y;
 		if (adx * adx + ady * ady > max_dist_sq) {
 			return true;
 		}
-		// Farthest point on AABB (always a corner) — if still within min, the whole cell is too close.
-		float fdx = std::max(std::abs(p_position.x - cell.aabb.min.x), std::abs(p_position.x - cell.aabb.max.x));
-		float fdy = std::max(std::abs(p_position.y - cell.aabb.min.y), std::abs(p_position.y - cell.aabb.max.y));
+		// Farthest point on AABB is always a corner. If that one is still closer than min => the whole cell is too close.
+		float fdx = std::max(std::abs(p_position.x - cell.aabb.min_x), std::abs(p_position.x - cell.aabb.max_x));
+		float fdy = std::max(std::abs(p_position.y - cell.aabb.min_y), std::abs(p_position.y - cell.aabb.max_y));
 		return fdx * fdx + fdy * fdy < min_dist_sq;
 	}
 
-	int to_cell_index(int cx, int cy) const;
+	// Returns the row aligned one dimensional index for the given cell coordinates
+	inline int to_cell_index(int cx, int cy) const {
+		return cy * m_grid_cols + cx;
+	}
+
 	void _update_grid_dimensions();
 	void refresh();
 	Node2D *get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
