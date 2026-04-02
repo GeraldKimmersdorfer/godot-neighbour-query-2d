@@ -138,7 +138,7 @@ private:
 	int m_grid_cols = 0;
 	int m_grid_rows = 0;
 	Vector2 m_domain_center;
-	float m_domain_diagonal_half = 0.0f;
+	float m_domain_diagonal = 0.0f;
 	std::vector<GridCell> m_grid;
 	std::vector<GridCell> m_grid_build;
 
@@ -156,11 +156,6 @@ private:
 		};
 	}
 
-	// Returns p_max_distance clamped to the farthest reachable point in the domain, to prevent overflow in cell range calculations.
-	inline float clamp_query_range(const Vector2 &p_position, float p_max_distance) const {
-		// dist-to-center + diagonal is a safe upper bound for the farthest reachable point in the domain.
-		return std::min(p_max_distance, p_position.distance_to(m_domain_center) + m_domain_diagonal_half);
-	}
 
 
 	// Returns the row aligned one dimensional index for the given cell coordinates
@@ -170,6 +165,9 @@ private:
 
 	void _update_grid_dimensions();
 	void refresh();
+	// Maps an outside-domain query position to the closest domain point, adjusts p_max_distance
+	// and p_min_distance by the outside-distance, and caps p_max_distance to prevent cell range overflow.
+	Vector2 prepare_query(const Vector2 &p_position, float &p_max_distance, float &p_min_distance) const;
 	Node2D *get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
 	Node2D *get_next_first_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
 	Array get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id);
