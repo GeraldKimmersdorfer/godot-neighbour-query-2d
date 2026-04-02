@@ -3,7 +3,7 @@ class_name Benchmark
 
 const ROW_KEYS := ["get_closest", "get_all", "get_next", "get_random", "get_next_first", "refresh"]
 const ATTR_KEYS := ["count", "placement", "movement", "time", "speed"]
-const BENCHMARK_TIME_EACH := 5.0
+const BENCHMARK_TIME_EACH := 20.0
 const QUERY_NODE_SPEED_EACH := 3.0
 const RUNS := [
 	{"count": 5000, "placement": DotContainer.InitPlacementMode.DENSITY, "movement": Dot.MovementMode.NONE,     "time": BENCHMARK_TIME_EACH, "speed": QUERY_NODE_SPEED_EACH},

@@ -61,7 +61,7 @@ func _input(event: InputEvent) -> void:
 			placement_mode = (placement_mode + 1) % DotContainer.InitPlacementMode.size() as DotContainer.InitPlacementMode
 		elif event.keycode == KEY_B:
 			run_benchmark()
-		elif event.keycode == KEY_EQUAL:  # "+" key
+		elif event.keycode == KEY_PLUS:
 			_dot_container.dot_count += 500
 			_dots_label.text = str(_dot_container.dot_count)
 		elif event.keycode == KEY_MINUS:
@@ -95,6 +95,7 @@ func get_state() -> Dictionary:
 	}
 
 func restore_state(state: Dictionary) -> void:
+	_dot_container.update_movement_for_all(state["movement"])
 	movement_mode = state["movement"]
 	_dot_container.recreate_dots(state["count"], state["placement"])
 	_dot_container.reset_query_node_positions()
