@@ -1,6 +1,6 @@
 # <img src="project/icon.svg" width="40" height="40" align="left" style="margin-right:8px"/> NeighbourQuery2D
 
-![Version](https://img.shields.io/badge/version-8-blue) [![Godot 4.6](https://img.shields.io/badge/Godot-4.6-blue?logo=godotengine&logoColor=white)](https://godotengine.org/) ![License](https://img.shields.io/github/license/GeraldKimmersdorfer/godot-neighbour-query-2d)
+![Version](https://img.shields.io/badge/version-0.9-blue) [![Godot 4.6](https://img.shields.io/badge/Godot-4.6-blue?logo=godotengine&logoColor=white)](https://godotengine.org/) ![License](https://img.shields.io/github/license/GeraldKimmersdorfer/godot-neighbour-query-2d)
 
 A Godot 4 GDExtension that provides fast 2D spatial queries for nodes in a scene. It maintains a uniform grid refilled on the physics tick (at adjustable time intervals). It lets you efficiently find nodes nearby.
 
@@ -22,11 +22,11 @@ A Godot 4 GDExtension that provides fast 2D spatial queries for nodes in a scene
   Returns up to `max_count` nearest subscribers within range.
 
 
-The grid (adjustable via `domain`and `grid_size`) gets refilled every physics frame by default, but that can be throttled (`refresh_intervall`). Query results then may not be accurate, but they do promise that all of the resulting Nodes are alive.
+The grid (adjustable via `domain` and `grid_size`) gets refilled every physics frame by default, but that can be throttled (`refresh_intervall`). Query results may then be slightly stale, but every returned node is guaranteed to be alive.
 
 The domain and grid cell size are adjustable via properties in the editor.
 
-In debug builds the node emits a `debug_info` signal each physics frame with a `debug_report` string containing per-function timings, frame budget percentages, and call counts.
+In debug builds the node emits a `debug_info` signal with a `debug_report` string containing per-function timings, frame budget percentages, and call counts.
 
 Check the Godot documentation for more details.
 
@@ -100,4 +100,21 @@ scons
 As a post-build step the compiled library is placed in `bin` and copied into `project/bin/`.
 
 ### Benchmark / Example Project
-Import the `project/` folder into Godot to test.
+
+The example scene spawns a configurable number of dots across a domain and runs all five query types simultaneously running on curves with each one highlighting its results in a distinct colour.
+
+![Example project screenshot](docs/screenshot_project_v0.9.png)
+
+The heatmap overlay (configurable via the inspector) shows which cells are read most often, and a live debug report in the top-right corner prints per-function average timings and frame-budget percentages. A benchmark may be started by pressing `B` on your keyboard. It creates am md-formatted table that gets automatically copied to the clipboard.
+
+#### Benchmark - RELEASE
+**CPU:** Intel(R) Core(TM) i5-10600 CPU @ 3.30GHz
+**Common:** time=20s, speed=3.00 rad/s
+| metric | 5000 DENSITY NONE | 500 DENSITY NONE | 0 UNIFORM NONE | 5000 UNIFORM NONE | 5000 UNIFORM STRAIGHT |
+| --- | --- | --- | --- | --- | --- |
+| get_closest | 5.94 μs | 4.83 μs | 2.13 μs | 6.79 μs | 6.85 μs |
+| get_all | 21.41 μs | 6.47 μs | 3.06 μs | 24.19 μs | 24.90 μs |
+| get_next | 2.81 μs | 2.39 μs | 1.87 μs | 3.14 μs | 3.18 μs |
+| get_random | 5.66 μs | 4.13 μs | 1.34 μs | 6.72 μs | 6.75 μs |
+| get_next_first | 0.73 μs | 1.19 μs | 1.44 μs | 0.68 μs | 0.69 μs |
+| refresh | 1.10 ms | 0.15 ms | 3.22 μs | 1.12 ms | 1.10 ms |

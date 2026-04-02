@@ -1,43 +1,81 @@
+@tool
 extends Node2D
+class_name DotContainer
 
 @export_group("Scene Controls")
 @export var _info_label: Label
 @export var _nq2d: NeighbourQuery2D
-@export var _option_container: OptionContainer
+
+enum InitPlacementMode { UNIFORM, DENSITY }
 
 @export_group("")
 @export var dot_template: PackedScene
-@export var dot_count: int = 1000
+@export var dot_count: int = 1000:
+	set(value):
+		var prev_count := _dots.size()
+		dot_count = maxi(0, value)
+		if not is_inside_tree() or Engine.is_editor_hint(): return
+		var diff := dot_count - prev_count
+		if diff > 0:
+			for i in diff: _spawn_dot()
+		elif diff < 0:
+			for i in -diff:
+				if _dots.is_empty(): break
+				_dots.pop_back().queue_free()
+
+@export var placement_mode: InitPlacementMode = InitPlacementMode.UNIFORM:
+	set(value):
+		placement_mode = value
+		queue_redraw()
+
+@export var density_texture: Texture2D:
+	set(value):
+		density_texture = value
+		_density_image = null
+		queue_redraw()
 
 var _dots: Array[Node2D] = []
-var _highlighted: Array[CanvasItem] = []
-var _closest_count: int = 5
+var _density_image: Image
+var _query_nodes: Array[DotQueryNode] = []
 var _debug_info: Dictionary = {}
+var _movement_mode: Dot.MovementMode = Dot.MovementMode.NONE
 
 func _ready() -> void:
+	if Engine.is_editor_hint(): return
+	if density_texture:
+		density_texture.changed.connect(reinitialize_positions, CONNECT_ONE_SHOT)
 	_nq2d.debug_info.connect(_on_ns_debug_info)
-	get_viewport().size_changed.connect(_on_viewport_size_changed)
-	var bounds := _get_bounds()
 	_info_label.visible = false
 	for i in dot_count:
-		var dot: Node2D = dot_template.instantiate()
-		dot.inactive = i % 2 == 0
-		dot.nq2d = _nq2d
-		dot.bounds = bounds
-		add_child(dot)
-		_dots.append(dot)
+		_spawn_dot()
+	var bounds: Rect2 = _nq2d.domain
+	for func_idx in DotQueryNode.QueryFunc.size():
+		var qn := DotQueryNode.new()
+		qn.query_func = func_idx as DotQueryNode.QueryFunc
+		qn.bounds = bounds
+		qn.nq2d = _nq2d
+		qn.position = bounds.get_center()
+		add_child(qn)
+		_query_nodes.append(qn)
 
-func _get_bounds() -> Rect2:
-	var gs := float(_nq2d.grid_size)
-	var viewport_size := get_viewport_rect().size
-	# Snap to the last fully visible cell boundary, then pad by one cell on each side
-	var snapped_size := Vector2(floor(viewport_size.x / gs) * gs, floor(viewport_size.y / gs) * gs)
-	return Rect2(Vector2(gs, gs), snapped_size - Vector2(gs * 2.0, gs * 2.0))
-
-func _on_viewport_size_changed() -> void:
-	var bounds := _get_bounds()
+func reinitialize_positions() -> void:
+	_density_image = null
 	for dot in _dots:
-		dot.bounds = bounds
+		dot.position = _get_spawn_position()
+
+func _get_spawn_position() -> Vector2:
+	var bounds: Rect2 = _nq2d.domain
+	if placement_mode == InitPlacementMode.DENSITY and density_texture and not _density_image:
+		_density_image = density_texture.get_image()
+	if placement_mode == InitPlacementMode.UNIFORM or not _density_image:
+		return Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
+	for _i in 100:
+		var pos := Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
+		var uv := (pos - bounds.position) / bounds.size
+		var px := _density_image.get_pixel(int(uv.x * (_density_image.get_width() - 1)), int(uv.y * (_density_image.get_height() - 1)))
+		if randf() < px.r:
+			return pos
+	return Vector2(randf_range(bounds.position.x, bounds.end.x), randf_range(bounds.position.y, bounds.end.y))
 
 func _on_ns_debug_info(key: StringName, value: Variant) -> void:
 	_debug_info[key] = value
@@ -52,58 +90,58 @@ func _on_ns_debug_info(key: StringName, value: Variant) -> void:
 
 func _spawn_dot() -> void:
 	var dot: Node2D = dot_template.instantiate()
-	dot.inactive = randf() > 0.5
+	dot.display_mode = Dot.DisplayMode.INACTIVE if randf() > 0.5 else Dot.DisplayMode.NORMAL
 	dot.nq2d = _nq2d
-	dot.bounds = _get_bounds()
+	dot.bounds = _nq2d.domain
+	dot.movement_mode = _movement_mode
 	add_child(dot)
+	dot.position = _get_spawn_position()
 	_dots.append(dot)
 
-func _remove_dot(dot: Node2D) -> void:
-	_dots.erase(dot)
-	_highlighted.erase(dot)
-	dot.queue_free()
+## Clears all dots and re-spawns count new ones with a fixed seed for reproducibility.
+func recreate_dots(count: int, p_placement_mode: InitPlacementMode) -> void:
+	for dot in _dots:
+		dot.queue_free()
+	_dots.clear()
+	_density_image = null
+	placement_mode = p_placement_mode
+	seed(0)
+	for i in count:
+		_spawn_dot()
+	dot_count = count  # sync exported var; setter is a no-op since _dots.size() == count
 
-func _stress_test() -> void:
-	if _dots.is_empty():
-		return
-	_remove_dot(_dots[randi() % _dots.size()])
-	_spawn_dot()
+## Resets all query node Lissajous time offsets and speed.
+func reset_query_node_positions(speed: float = DotQueryNode.BASE_FREQ) -> void:
+	for qn in _query_nodes:
+		qn.speed = speed
+		qn._reset_phase(DotQueryNode.BASE_FREQ)
+
+func update_movement_for_all(mode: Dot.MovementMode) -> void:
+	_movement_mode = mode
+	for dot in _dots:
+		dot.movement_mode = mode
+
+func set_query_range(max_range: float, min_range: float) -> void:
+	for qn in _query_nodes:
+		qn.query_max_range = max_range
+		qn.query_min_range = min_range
+
+func set_query_speed(speed: float) -> void:
+	for qn in _query_nodes:
+		qn.speed = speed
+
+func wait_for_debug_report() -> String:
+	var key: StringName = &""
+	var report: String = ""
+	while key != &"debug_report":
+		var args: Array = await _nq2d.debug_info
+		key = args[0]
+		report = args[1]
+	return report
 
 func _physics_process(_delta: float) -> void:
-	_stress_test()
-	for dot in _highlighted:
-		if is_instance_valid(dot):
-			dot.modulate = Color.WHITE
-	_highlighted.clear()
-
-	var mouse_pos := get_global_mouse_position()
-	var neighbours = []
-	var mode := _option_container.mode
-	var max_range := _option_container.query_max_range
-	var min_range := _option_container.query_min_range
-
-	if mode == OptionContainer.QueryMode.GET_ALL:
-		neighbours = _nq2d.get_all(mouse_pos, max_range, min_range, Dot.LAYER_ACTIVE)
-	elif mode == OptionContainer.QueryMode.GET_NEXT:
-		neighbours = [_nq2d.get_next(mouse_pos, max_range, min_range, Dot.LAYER_ACTIVE)]
-	elif mode == OptionContainer.QueryMode.GET_CLOSEST:
-		neighbours = _nq2d.get_closest(mouse_pos, _closest_count, max_range, min_range, Dot.LAYER_ACTIVE)
-	elif mode == OptionContainer.QueryMode.GET_RANDOM:
-		neighbours = _nq2d.get_random(mouse_pos, _closest_count, max_range, min_range, Dot.LAYER_ACTIVE)
-	else:
-		neighbours = [_nq2d.get_next_first(mouse_pos, max_range, min_range, Dot.LAYER_ACTIVE)]
-
-	for dot in neighbours:
-		if dot:
-			dot.modulate = Color(1.0, 0.0, 0.0)
-			_highlighted.append(dot)
-
-	queue_redraw()
+	if Engine.is_editor_hint(): return
 
 func _draw() -> void:
-	var mouse_pos := get_global_mouse_position()
-	var max_range := _option_container.query_max_range
-	var min_range := _option_container.query_min_range
-	draw_arc(mouse_pos, max_range, 0.0, TAU, 64, Color(1.0, 0.0, 0.0, 1.0), 2)
-	if min_range > 0.0:
-		draw_arc(mouse_pos, min_range, 0.0, TAU, 64, Color(1.0, 0.0, 0.0, 0.7), 2)
+	if density_texture and placement_mode == InitPlacementMode.DENSITY:
+		draw_texture_rect(density_texture, _nq2d.domain, false, Color(1, 1, 1, 0.2))

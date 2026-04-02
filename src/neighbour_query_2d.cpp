@@ -16,7 +16,7 @@
 #include <random>
 
 void NeighbourQuery2D::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer"), &NeighbourQuery2D::subscribe);
+	ClassDB::bind_method(D_METHOD("subscribe", "node", "layer", "moving_entity", "offset"), &NeighbourQuery2D::subscribe, DEFVAL(Variant()), DEFVAL(Vector2()));
 	ClassDB::bind_method(D_METHOD("unsubscribe", "node"), &NeighbourQuery2D::unsubscribe);
 	ClassDB::bind_method(D_METHOD("get_next", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_next, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
 	ClassDB::bind_method(D_METHOD("get_next_first", "position", "max_distance", "min_distance", "layer_mask", "exclude"), &NeighbourQuery2D::get_next_first, DEFVAL(std::numeric_limits<float>::max()), DEFVAL(0.0f), DEFVAL(0xFFFFFFFF), DEFVAL(Variant()));
@@ -29,6 +29,9 @@ void NeighbourQuery2D::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_refresh_intervall", "refresh_intervall"), &NeighbourQuery2D::set_refresh_intervall);
 	ClassDB::bind_method(D_METHOD("get_refresh_intervall"), &NeighbourQuery2D::get_refresh_intervall);
+
+	ClassDB::bind_method(D_METHOD("set_gc_interval", "gc_interval"), &NeighbourQuery2D::set_gc_interval);
+	ClassDB::bind_method(D_METHOD("get_gc_interval"), &NeighbourQuery2D::get_gc_interval);
 
 	ClassDB::bind_method(D_METHOD("set_use_global_position", "use_global_position"), &NeighbourQuery2D::set_use_global_position);
 	ClassDB::bind_method(D_METHOD("get_use_global_position"), &NeighbourQuery2D::get_use_global_position);
@@ -53,6 +56,7 @@ void NeighbourQuery2D::_bind_methods() {
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "grid_size"), "set_grid_size", "get_grid_size");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "refresh_intervall"), "set_refresh_intervall", "get_refresh_intervall");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "gc_interval"), "set_gc_interval", "get_gc_interval");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_global_position"), "set_use_global_position", "get_use_global_position");
 	ADD_PROPERTY(PropertyInfo(Variant::RECT2, "domain"), "set_domain", "get_domain");
 
@@ -80,7 +84,7 @@ void NeighbourQuery2D::_draw() {
 
 	draw_rect(domain, fill_color, true);
 
-	{
+	if (debug_draw_heatmap_intervall >= 0.0f) {
 		const std::vector<int> &counts = (debug_heatmap_mode == QUERY_COUNTS) ? m_grid_querycount_debug : m_grid_cellreads_debug;
 		int max_count = 0;
 		for (int c : counts) {
@@ -145,6 +149,62 @@ void NeighbourQuery2D::emit_debug_report() {
 
 #endif
 
+NeighbourQuery2D::~NeighbourQuery2D() {
+	_stop_gc_thread();
+}
+
+void NeighbourQuery2D::_stop_gc_thread() {
+	m_gc_stop.store(true);
+	m_gc_cv.notify_all();
+	if (m_gc_thread.joinable()) {
+		m_gc_thread.join();
+	}
+}
+
+void NeighbourQuery2D::_gc_thread_func() {
+	while (!m_gc_stop.load()) {
+		{
+			std::unique_lock<std::mutex> lock(m_gc_cv_mutex);
+			m_gc_cv.wait_for(lock, std::chrono::duration<float>(gc_interval), [this] { return m_gc_stop.load(); });
+		}
+		if (m_gc_stop.load()) {
+			break;
+		}
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			for (auto group_it = m_groups.begin(); group_it != m_groups.end();) {
+				SubscriberGroup &group = group_it->second;
+				// If the shared moving entity is gone, drop the whole group.
+				if (group.moving_entity != nullptr &&
+						UtilityFunctions::instance_from_id(group.moving_entity_instance_id) == nullptr) {
+					for (auto &sub : group.members) {
+						m_node_to_group.erase(sub.node);
+					}
+					group_it = m_groups.erase(group_it);
+					continue;
+				}
+				// Sweep individual members.
+				auto &members = group.members;
+				for (auto it = members.begin(); it != members.end();) {
+					if (UtilityFunctions::instance_from_id(it->node_instance_id) == nullptr) {
+						m_node_to_group.erase(it->node);
+						*it = members.back();
+						members.pop_back();
+					} else {
+						++it;
+					}
+				}
+				if (members.empty()) {
+					group_it = m_groups.erase(group_it);
+				} else {
+					++group_it;
+				}
+			}
+		}
+	}
+}
+
+
 void NeighbourQuery2D::_ready() {
 	_update_grid_dimensions();
 	if (Engine::get_singleton()->is_editor_hint()) {
@@ -155,6 +215,8 @@ void NeighbourQuery2D::_ready() {
 #endif
 	} else {
 		set_physics_process(true);
+		m_gc_stop.store(false);
+		m_gc_thread = std::thread(&NeighbourQuery2D::_gc_thread_func, this);
 #if DEBUG_INFORMATION
 		set_process(true);
 		m_debug_timer = DebugTimer(Engine::get_singleton()->get_physics_ticks_per_second());
@@ -163,6 +225,7 @@ void NeighbourQuery2D::_ready() {
 }
 
 void NeighbourQuery2D::_physics_process(double p_delta) {
+
 #if DEBUG_INFORMATION
 	if (debug_report_interval >= 0.0f) {
 		m_time_since_debug_report += p_delta;
@@ -181,15 +244,11 @@ void NeighbourQuery2D::_physics_process(double p_delta) {
 	refresh();
 }
 
-int NeighbourQuery2D::to_cell_index(int cx, int cy) const {
-	return cy * m_grid_cols + cx;
-}
-
 void NeighbourQuery2D::_update_grid_dimensions() {
 	m_grid_cols = std::max(1, static_cast<int>(std::ceil(domain.size.x / grid_size)));
 	m_grid_rows = std::max(1, static_cast<int>(std::ceil(domain.size.y / grid_size)));
 	m_domain_center = domain.position + domain.size * 0.5f;
-	m_domain_diagonal_half = domain.size.length() * 0.5f;
+	m_domain_diagonal = domain.size.length();
 	int cell_count = m_grid_cols * m_grid_rows;
 	m_grid_build.assign(cell_count, {});
 #if DEBUG_INFORMATION
@@ -199,6 +258,26 @@ void NeighbourQuery2D::_update_grid_dimensions() {
 	m_grid.assign(cell_count, {});
 }
 
+Vector2 NeighbourQuery2D::prepare_query(const Vector2 &p_position, float &p_max_distance, float &p_min_distance) const {
+	// Cap p_max_distance to the domain diagonal to prevent cell range overflow.
+	p_max_distance = std::min(p_max_distance, m_domain_diagonal);
+
+	// If position is inside the domain fine...
+	if (p_position.x >= domain.position.x && p_position.x <= domain.position.x + domain.size.x &&
+			p_position.y >= domain.position.y && p_position.y <= domain.position.y + domain.size.y) {
+		return p_position;
+	}
+
+	// ... but if not project it to the closest point inside the domain and adapt min and max distance accordingly
+	Vector2 qpos = Vector2(
+			std::clamp(p_position.x, domain.position.x, domain.position.x + domain.size.x),
+			std::clamp(p_position.y, domain.position.y, domain.position.y + domain.size.y));
+	float outside_dist = p_position.distance_to(qpos);
+	p_max_distance = std::max(0.0f, p_max_distance - outside_dist);
+	p_min_distance = std::max(0.0f, p_min_distance - outside_dist);
+	return qpos;
+}
+
 void NeighbourQuery2D::refresh() {
 #if DEBUG_INFORMATION
 	m_debug_timer.start("refresh", "refresh");
@@ -206,28 +285,63 @@ void NeighbourQuery2D::refresh() {
 
 	// Clear build buffer in-place (keeps per-cell capacity to avoid repeated reallocations).
 	for (auto &cell : m_grid_build) {
-		cell.clear();
+		cell.entries.clear();
 	}
 
-	std::vector<Node2D *> invalid_nodes;
-
-	for (auto &[node, subscriber] : m_subscribers) {
-		if (UtilityFunctions::instance_from_id(subscriber.node_instance_id) == nullptr) {
-			invalid_nodes.push_back(node);
-			continue;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		for (auto &[entity_key, group] : m_groups) {
+			if (entity_key == nullptr) {
+				// Solo group: each member fetches its own position.
+				for (auto &sub : group.members) {
+					if (UtilityFunctions::instance_from_id(sub.node_instance_id) == nullptr) {
+						continue;
+					}
+					Vector2 pos = (sub.node->*m_get_position)();
+					int cx = static_cast<int>(std::floor((pos.x - domain.position.x) / grid_size));
+					int cy = static_cast<int>(std::floor((pos.y - domain.position.y) / grid_size));
+					if (!is_cell_in_bounds(cx, cy)) {
+						continue;
+					}
+					m_grid_build[to_cell_index(cx, cy)].entries.push_back(GridEntry{ sub.node, sub.node_instance_id, sub.layer, pos });
+				}
+			} else {
+				// Shared entity group: one get_position() call for all members.
+				if (UtilityFunctions::instance_from_id(group.moving_entity_instance_id) == nullptr) {
+					continue;
+				}
+				Vector2 base = (entity_key->*m_get_position)();
+				for (auto &sub : group.members) {
+					if (UtilityFunctions::instance_from_id(sub.node_instance_id) == nullptr) {
+						continue;
+					}
+					Vector2 pos = base + sub.offset;
+					int cx = static_cast<int>(std::floor((pos.x - domain.position.x) / grid_size));
+					int cy = static_cast<int>(std::floor((pos.y - domain.position.y) / grid_size));
+					if (!is_cell_in_bounds(cx, cy)) {
+						continue;
+					}
+					m_grid_build[to_cell_index(cx, cy)].entries.push_back(GridEntry{ sub.node, sub.node_instance_id, sub.layer, pos });
+				}
+			}
 		}
-		subscriber.position = (node->*m_get_position)();
-		int cx = static_cast<int>(std::floor((subscriber.position.x - domain.position.x) / grid_size));
-		int cy = static_cast<int>(std::floor((subscriber.position.y - domain.position.y) / grid_size));
-		// Points outside the domain are ignored and not added to the AS.
-		if (!is_cell_in_bounds(cx, cy)) {
-			continue;
-		}
-		m_grid_build[to_cell_index(cx, cy)].push_back(subscriber);
 	}
 
-	for (Node2D *node : invalid_nodes) {
-		m_subscribers.erase(node);
+	// Build per-cell AABBs for early discard in queries.
+	for (auto &cell : m_grid_build) {
+		if (cell.entries.empty()) {
+			continue;
+		}
+		Vector2 mn = cell.entries[0].position;
+		Vector2 mx = mn;
+		for (size_t i = 1; i < cell.entries.size(); i++) {
+			const Vector2 &p = cell.entries[i].position;
+			if (p.x < mn.x) mn.x = p.x;
+			if (p.y < mn.y) mn.y = p.y;
+			if (p.x > mx.x) mx.x = p.x;
+			if (p.y > mx.y) mx.y = p.y;
+		}
+		cell.aabb = { mn.x, mn.y, mx.x, mx.y };
 	}
 
 	std::swap(m_grid, m_grid_build);
@@ -237,51 +351,96 @@ void NeighbourQuery2D::refresh() {
 #endif
 }
 
-void NeighbourQuery2D::subscribe(Node2D *p_node, uint32_t p_layer) {
-	m_subscribers[p_node] = { p_node, static_cast<uint64_t>(p_node->get_instance_id()), p_layer };
+void NeighbourQuery2D::subscribe(Node2D *p_node, uint32_t p_layer, Node2D *p_moving_entity, Vector2 p_offset) {
+	std::lock_guard<std::mutex> lock(m_mutex);
+	// Remove from current group if re-subscribing.
+	auto lookup_it = m_node_to_group.find(p_node);
+	if (lookup_it != m_node_to_group.end()) {
+		Node2D *old_key = lookup_it->second;
+		auto group_it = m_groups.find(old_key);
+		if (group_it != m_groups.end()) {
+			auto &members = group_it->second.members;
+			for (auto it = members.begin(); it != members.end(); ++it) {
+				if (it->node == p_node) {
+					*it = members.back();
+					members.pop_back();
+					break;
+				}
+			}
+			if (members.empty()) {
+				m_groups.erase(group_it);
+			}
+		}
+	}
+	// Insert into the new group (created on demand).
+	SubscriberGroup &group = m_groups[p_moving_entity];
+	if (group.moving_entity == nullptr && p_moving_entity != nullptr) {
+		group.moving_entity = p_moving_entity;
+		group.moving_entity_instance_id = static_cast<uint64_t>(p_moving_entity->get_instance_id());
+	}
+	group.members.push_back({ p_node, static_cast<uint64_t>(p_node->get_instance_id()), p_layer, p_offset });
+	m_node_to_group[p_node] = p_moving_entity;
 }
 
 void NeighbourQuery2D::unsubscribe(Node2D *p_node) {
-	m_subscribers.erase(p_node);
+	std::lock_guard<std::mutex> lock(m_mutex);
+	auto lookup_it = m_node_to_group.find(p_node);
+	if (lookup_it == m_node_to_group.end()) {
+		return;
+	}
+	Node2D *group_key = lookup_it->second;
+	auto group_it = m_groups.find(group_key);
+	if (group_it != m_groups.end()) {
+		auto &members = group_it->second.members;
+		for (auto it = members.begin(); it != members.end(); ++it) {
+			if (it->node == p_node) {
+				*it = members.back();
+				members.pop_back();
+				break;
+			}
+		}
+		if (members.empty()) {
+			m_groups.erase(group_it);
+		}
+	}
+	m_node_to_group.erase(lookup_it);
 }
 
 Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
-	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
-	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+	const Vector2 qpos = prepare_query(p_position, p_max_distance, p_min_distance);
+	int cx0 = static_cast<int>(std::floor((qpos.x - domain.position.x) / grid_size));
+	int cy0 = static_cast<int>(std::floor((qpos.y - domain.position.y) / grid_size));
 #if DEBUG_INFORMATION
 	if (is_cell_in_bounds(cx0, cy0)) {
 		m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 	}
 #endif
 
-	// NOTE: Cap max_distance to guarantee loop termination.
-	// dist-to-center + diagonal is a safe upper bound for the farthest reachable point in the domain.
-	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
-	if (p_max_distance > upper_bound) {
-		p_max_distance = upper_bound;
-	}
-
 	float best_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
-	const Subscriber *best = nullptr;
+	const GridEntry *best = nullptr;
 
 	auto check = [&](int cx, int cy) {
 		if (!is_cell_in_bounds(cx, cy)) {
 			return;
 		}
 		const int cell_idx = to_cell_index(cx, cy);
+		const GridCell &cell = m_grid[cell_idx];
+		if (cell.early_discard_check(qpos, min_dist_sq, best_dist_sq)) {
+			return;
+		}
 #if DEBUG_INFORMATION
 		m_grid_cellreads_debug[cell_idx]++;
 #endif
-		for (const Subscriber &s : m_grid[cell_idx]) {
+		for (const GridEntry &s : cell.entries) {
 			if ((s.layer & p_layer_mask) == 0) {
 				continue;
 			}
 			if (s.node_instance_id == p_exclude_id) {
 				continue;
 			}
-			float d = s.position.distance_squared_to(p_position);
+			float d = s.position.distance_squared_to(qpos);
 			if (d >= best_dist_sq || d < min_dist_sq) {
 				continue;
 			}
@@ -310,14 +469,18 @@ Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_d
 			break;
 		}
 
-		for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
-			check(cx, cy0 - r);
-			check(cx, cy0 + r);
-		}
+		// NOTE: Instead of this loop I tried precomputed ring traversal order array that are
+		// sorted by the Chabyshev distance. This adds additional storage and complexity and didnt
+		// seem to be worth it.
 		for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
 			check(cx0 - r, cy);
 			check(cx0 + r, cy);
 		}
+		for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
+			check(cx, cy0 - r);
+			check(cx, cy0 + r);
+		}
+
 	}
 
 	return best ? best->node : nullptr;
@@ -336,41 +499,42 @@ Node2D *NeighbourQuery2D::get_next(const Vector2 &p_position, float p_max_distan
 }
 
 Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+	const Vector2 qpos = prepare_query(p_position, p_max_distance, p_min_distance);
 #if DEBUG_INFORMATION
 	{
-		int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
-		int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+		int cx0 = static_cast<int>(std::floor((qpos.x - domain.position.x) / grid_size));
+		int cy0 = static_cast<int>(std::floor((qpos.y - domain.position.y) / grid_size));
 		if (is_cell_in_bounds(cx0, cy0)) {
 			m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 		}
 	}
 #endif
 
-	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
-	float range = std::min(p_max_distance, upper_bound);
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
-	int min_cx = std::max(0, static_cast<int>(std::floor((p_position.x - range - domain.position.x) / grid_size)));
-	int max_cx = std::min(m_grid_cols - 1, static_cast<int>(std::floor((p_position.x + range - domain.position.x) / grid_size)));
-	int min_cy = std::max(0, static_cast<int>(std::floor((p_position.y - range - domain.position.y) / grid_size)));
-	int max_cy = std::min(m_grid_rows - 1, static_cast<int>(std::floor((p_position.y + range - domain.position.y) / grid_size)));
-
-	std::vector<const Subscriber *> candidates;
-	for (int cy = min_cy; cy <= max_cy; cy++) {
-		for (int cx = min_cx; cx <= max_cx; cx++) {
+	auto cr = get_cell_range(qpos, p_max_distance);
+	// We use a static candidates vector to avoid unnecessary reallocations/resizing in subsequent queries
+	thread_local static std::vector<const GridEntry *> candidates;
+	candidates.clear();
+	for (int cy = cr.min_y; cy <= cr.max_y; cy++) {
+		for (int cx = cr.min_x; cx <= cr.max_x; cx++) {
 			const int cell_idx = to_cell_index(cx, cy);
+			const GridCell &cell = m_grid[cell_idx];
+			if (cell.early_discard_check(qpos, min_dist_sq, max_dist_sq)) {
+				continue;
+			}
 #if DEBUG_INFORMATION
 			m_grid_cellreads_debug[cell_idx]++;
 #endif
-			for (const Subscriber &s : m_grid[cell_idx]) {
+			for (const GridEntry &s : cell.entries) {
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
 				if (s.node_instance_id == p_exclude_id) {
 					continue;
 				}
-				float d = s.position.distance_squared_to(p_position);
+				float d = s.position.distance_squared_to(qpos);
 				if (d > max_dist_sq || d < min_dist_sq) {
 					continue;
 				}
@@ -386,7 +550,7 @@ Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_cou
 	Array result;
 	while (remaining > 0 && (int)result.size() < p_max_count) {
 		int idx = rng() % remaining;
-		const Subscriber *s = candidates[idx];
+		const GridEntry *s = candidates[idx];
 		candidates[idx] = candidates[--remaining];
 		if (UtilityFunctions::instance_from_id(s->node_instance_id) == nullptr) {
 			continue;
@@ -413,40 +577,40 @@ Array NeighbourQuery2D::get_random(const Vector2 &p_position, int p_max_count, f
 
 
 Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
-	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
-	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+	const Vector2 qpos = prepare_query(p_position, p_max_distance, p_min_distance);
+	int cx0 = static_cast<int>(std::floor((qpos.x - domain.position.x) / grid_size));
+	int cy0 = static_cast<int>(std::floor((qpos.y - domain.position.y) / grid_size));
 #if DEBUG_INFORMATION
 	if (is_cell_in_bounds(cx0, cy0)) {
 		m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 	}
 #endif
 
-	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
-	if (p_max_distance > upper_bound) {
-		p_max_distance = upper_bound;
-	}
-
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
 
 	// Returns the first valid subscriber in the cell, or nullptr if none.
-	auto check_cell = [&](int cx, int cy) -> const Subscriber * {
+	auto check_cell = [&](int cx, int cy) -> const GridEntry * {
 		if (!is_cell_in_bounds(cx, cy)) {
 			return nullptr;
 		}
 		const int cell_idx = to_cell_index(cx, cy);
+		const GridCell &cell = m_grid[cell_idx];
+		if (cell.early_discard_check(qpos, min_dist_sq, max_dist_sq)) {
+			return nullptr;
+		}
 #if DEBUG_INFORMATION
 		m_grid_cellreads_debug[cell_idx]++;
 #endif
-		for (const Subscriber &s : m_grid[cell_idx]) {
+		for (const GridEntry &s : cell.entries) {
 			if ((s.layer & p_layer_mask) == 0) {
 				continue;
 			}
 			if (s.node_instance_id == p_exclude_id) {
 				continue;
 			}
-			float d = s.position.distance_squared_to(p_position);
+			float d = s.position.distance_squared_to(qpos);
 			if (d > max_dist_sq || d < min_dist_sq) {
 				continue;
 			}
@@ -458,7 +622,7 @@ Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p
 		return nullptr;
 	};
 
-	if (const Subscriber *s = check_cell(cx0, cy0)) {
+	if (const GridEntry *s = check_cell(cx0, cy0)) {
 		return s->node;
 	}
 
@@ -467,13 +631,13 @@ Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p
 			break;
 		}
 
-		for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
-			if (const Subscriber *s = check_cell(cx, cy0 - r)) return s->node;
-			if (const Subscriber *s = check_cell(cx, cy0 + r)) return s->node;
-		}
 		for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
-			if (const Subscriber *s = check_cell(cx0 - r, cy)) return s->node;
-			if (const Subscriber *s = check_cell(cx0 + r, cy)) return s->node;
+			if (const GridEntry *s = check_cell(cx0 - r, cy)) return s->node;
+			if (const GridEntry *s = check_cell(cx0 + r, cy)) return s->node;
+		}
+		for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
+			if (const GridEntry *s = check_cell(cx, cy0 - r)) return s->node;
+			if (const GridEntry *s = check_cell(cx, cy0 + r)) return s->node;
 		}
 	}
 
@@ -493,57 +657,63 @@ Node2D *NeighbourQuery2D::get_next_first(const Vector2 &p_position, float p_max_
 }
 
 Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
-	Array result;
+	const Vector2 qpos = prepare_query(p_position, p_max_distance, p_min_distance);
 
 #if DEBUG_INFORMATION
 	{
-		int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
-		int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+		int cx0 = static_cast<int>(std::floor((qpos.x - domain.position.x) / grid_size));
+		int cy0 = static_cast<int>(std::floor((qpos.y - domain.position.y) / grid_size));
 		if (is_cell_in_bounds(cx0, cy0)) {
 			m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 		}
 	}
 #endif
 
-	// Cap to domain bounds to avoid overflow in cell range computation when p_max_distance is very large.
-	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
-	float range = std::min(p_max_distance, upper_bound);
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
+	thread_local static std::vector<const GridEntry *> candidates;
+	candidates.clear();
 
-	int min_cx = std::max(0, static_cast<int>(std::floor((p_position.x - range - domain.position.x) / grid_size)));
-	int max_cx = std::min(m_grid_cols - 1, static_cast<int>(std::floor((p_position.x + range - domain.position.x) / grid_size)));
-	int min_cy = std::max(0, static_cast<int>(std::floor((p_position.y - range - domain.position.y) / grid_size)));
-	int max_cy = std::min(m_grid_rows - 1, static_cast<int>(std::floor((p_position.y + range - domain.position.y) / grid_size)));
-
-	for (int cy = min_cy; cy <= max_cy; cy++) {
-		for (int cx = min_cx; cx <= max_cx; cx++) {
+	auto cr = get_cell_range(qpos, p_max_distance);
+	for (int cy = cr.min_y; cy <= cr.max_y; cy++) {
+		for (int cx = cr.min_x; cx <= cr.max_x; cx++) {
 			const int cell_idx = to_cell_index(cx, cy);
+			const GridCell &cell = m_grid[cell_idx];
+			if (cell.early_discard_check(qpos, min_dist_sq, max_dist_sq)) {
+				continue;
+			}
 #if DEBUG_INFORMATION
 			m_grid_cellreads_debug[cell_idx]++;
 #endif
 			// NOTE: I already tried having template functions with static ifs to completely remove checks like validity, min distance,
 			// and so on from the hot loop. It did not yield any significant change to the execution time. (same for the other get_ functions)
-			for (const Subscriber &s : m_grid[cell_idx]) {
+			for (const GridEntry &s : cell.entries) {
 				if ((s.layer & p_layer_mask) == 0) {
 					continue;
 				}
 				if (s.node_instance_id == p_exclude_id) {
 					continue;
 				}
-				float d = s.position.distance_squared_to(p_position);
+				float d = s.position.distance_squared_to(qpos);
 				if (d > max_dist_sq || d < min_dist_sq) {
 					continue;
 				}
-				if (UtilityFunctions::instance_from_id(s.node_instance_id) == nullptr) {
-					continue;
-				}
-				result.push_back(s.node);
+				candidates.push_back(&s);
 			}
 		}
 	}
 
+	Array result;
+	result.resize(candidates.size());
+	int count = 0;
+	for (const GridEntry *s : candidates) {
+		if (UtilityFunctions::instance_from_id(s->node_instance_id) == nullptr) {
+			continue;
+		}
+		result[count++] = s->node;
+	}
+	result.resize(count);
 	return result;
 }
 
@@ -564,21 +734,18 @@ Array NeighbourQuery2D::get_closest_grid(const Vector2 &p_position, int p_max_co
 	// Using a heap here allows us O(logn) for insert whereas a sorted array would be O(n).
 	using Entry = std::pair<float, Node2D *>;
 	auto cmp = [](const Entry &a, const Entry &b) { return a.first < b.first; };
-	std::vector<Entry> heap;
-	heap.reserve(p_max_count + 1);
+	thread_local static std::vector<Entry> heap;
+	heap.clear();
 
-	int cx0 = static_cast<int>(std::floor((p_position.x - domain.position.x) / grid_size));
-	int cy0 = static_cast<int>(std::floor((p_position.y - domain.position.y) / grid_size));
+	const Vector2 qpos = prepare_query(p_position, p_max_distance, p_min_distance);
+	int cx0 = static_cast<int>(std::floor((qpos.x - domain.position.x) / grid_size));
+	int cy0 = static_cast<int>(std::floor((qpos.y - domain.position.y) / grid_size));
 #if DEBUG_INFORMATION
 	if (is_cell_in_bounds(cx0, cy0)) {
 		m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 	}
 #endif
 
-	float upper_bound = p_position.distance_to(m_domain_center) + m_domain_diagonal_half;
-	if (p_max_distance > upper_bound) {
-		p_max_distance = upper_bound;
-	}
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
@@ -588,17 +755,21 @@ Array NeighbourQuery2D::get_closest_grid(const Vector2 &p_position, int p_max_co
 			return;
 		}
 		const int cell_idx = to_cell_index(cx, cy);
+		const GridCell &cell = m_grid[cell_idx];
+		if (cell.early_discard_check(qpos, min_dist_sq, max_dist_sq)) {
+			return;
+		}
 #if DEBUG_INFORMATION
 		m_grid_cellreads_debug[cell_idx]++;
 #endif
-		for (const Subscriber &s : m_grid[cell_idx]) {
+		for (const GridEntry &s : cell.entries) {
 			if ((s.layer & p_layer_mask) == 0) {
 				continue;
 			}
 			if (s.node_instance_id == p_exclude_id) {
 				continue;
 			}
-			float d = s.position.distance_squared_to(p_position);
+			float d = s.position.distance_squared_to(qpos);
 			if (d > max_dist_sq || d < min_dist_sq) {
 				continue;
 			}
@@ -628,13 +799,13 @@ Array NeighbourQuery2D::get_closest_grid(const Vector2 &p_position, int p_max_co
 			break;
 		}
 
-		for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
-			check(cx, cy0 - r);
-			check(cx, cy0 + r);
-		}
 		for (int cy = cy0 - r + 1; cy <= cy0 + r - 1; cy++) {
 			check(cx0 - r, cy);
 			check(cx0 + r, cy);
+		}
+		for (int cx = cx0 - r; cx <= cx0 + r; cx++) {
+			check(cx, cy0 - r);
+			check(cx, cy0 + r);
 		}
 	}
 
@@ -678,6 +849,14 @@ void NeighbourQuery2D::set_refresh_intervall(float p_refresh_intervall) {
 
 float NeighbourQuery2D::get_refresh_intervall() const {
 	return refresh_intervall;
+}
+
+void NeighbourQuery2D::set_gc_interval(float p_gc_interval) {
+	gc_interval = p_gc_interval;
+}
+
+float NeighbourQuery2D::get_gc_interval() const {
+	return gc_interval;
 }
 
 void NeighbourQuery2D::set_use_global_position(bool p_use_global_position) {

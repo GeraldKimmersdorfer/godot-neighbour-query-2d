@@ -244,8 +244,9 @@ jobs:
           cp README.md staging/
           cp LICENSE.md staging/
 
-          # LICENSE also goes inside the addon folder
+          # Also into the addon folder
           cp LICENSE.md "$ADDON_DIR/"
+          cp README.md "$ADDON_DIR/"
 
           # All built artifacts go inside the addon folder
           cp -r release-files/. "$ADDON_DIR/"

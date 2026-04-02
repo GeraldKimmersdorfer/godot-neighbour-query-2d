@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://bfebysnoj1y8b"]
+
+[ext_resource type="Script" uid="uid://cty7m5epso7td" path="res://dot_query_node.gd" id="1_7e6ui"]
+
+[node name="DotQueryNode" type="Node2D" unique_id=1650242965]
+script = ExtResource("1_7e6ui")
