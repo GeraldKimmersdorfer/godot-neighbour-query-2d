@@ -411,7 +411,7 @@ Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_d
 	int cx0 = static_cast<int>(std::floor((qpos.x - domain.position.x) / grid_size));
 	int cy0 = static_cast<int>(std::floor((qpos.y - domain.position.y) / grid_size));
 #if DEBUG_INFORMATION
-	if (is_cell_in_bounds(cx0, cy0)) {
+	if (debug_draw_domain) {
 		m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 	}
 #endif
@@ -431,7 +431,8 @@ Node2D *NeighbourQuery2D::get_next_grid(const Vector2 &p_position, float p_max_d
 			return;
 		}
 #if DEBUG_INFORMATION
-		m_grid_cellreads_debug[cell_idx]++;
+		if (debug_draw_domain)
+			m_grid_cellreads_debug[cell_idx]++;
 #endif
 		for (const GridEntry &s : cell.entries) {
 			if ((s.layer & p_layer_mask) == 0) {
@@ -499,6 +500,7 @@ Node2D *NeighbourQuery2D::get_next(const Vector2 &p_position, float p_max_distan
 }
 
 Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+	return Array();
 	const Vector2 qpos = prepare_query(p_position, p_max_distance, p_min_distance);
 #if DEBUG_INFORMATION
 	if (debug_draw_domain) {
@@ -585,7 +587,7 @@ Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p
 	int cx0 = static_cast<int>(std::floor((qpos.x - domain.position.x) / grid_size));
 	int cy0 = static_cast<int>(std::floor((qpos.y - domain.position.y) / grid_size));
 #if DEBUG_INFORMATION
-	if (is_cell_in_bounds(cx0, cy0)) {
+	if (debug_draw_domain) {
 		m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 	}
 #endif
@@ -605,7 +607,8 @@ Node2D *NeighbourQuery2D::get_next_first_grid(const Vector2 &p_position, float p
 			return nullptr;
 		}
 #if DEBUG_INFORMATION
-		m_grid_cellreads_debug[cell_idx]++;
+		if (debug_draw_domain)
+			m_grid_cellreads_debug[cell_idx]++;
 #endif
 		for (const GridEntry &s : cell.entries) {
 			if ((s.layer & p_layer_mask) == 0) {
@@ -661,6 +664,7 @@ Node2D *NeighbourQuery2D::get_next_first(const Vector2 &p_position, float p_max_
 }
 
 Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
+	return Array();
 	const Vector2 qpos = prepare_query(p_position, p_max_distance, p_min_distance);
 #if DEBUG_INFORMATION
 	if (debug_draw_domain) {
@@ -744,7 +748,7 @@ Array NeighbourQuery2D::get_closest_grid(const Vector2 &p_position, int p_max_co
 	int cx0 = static_cast<int>(std::floor((qpos.x - domain.position.x) / grid_size));
 	int cy0 = static_cast<int>(std::floor((qpos.y - domain.position.y) / grid_size));
 #if DEBUG_INFORMATION
-	if (is_cell_in_bounds(cx0, cy0)) {
+	if (debug_draw_domain) {
 		m_grid_querycount_debug[to_cell_index(cx0, cy0)]++;
 	}
 #endif
@@ -763,7 +767,8 @@ Array NeighbourQuery2D::get_closest_grid(const Vector2 &p_position, int p_max_co
 			return;
 		}
 #if DEBUG_INFORMATION
-		m_grid_cellreads_debug[cell_idx]++;
+		if (debug_draw_domain)
+			m_grid_cellreads_debug[cell_idx]++;
 #endif
 		for (const GridEntry &s : cell.entries) {
 			if ((s.layer & p_layer_mask) == 0) {
