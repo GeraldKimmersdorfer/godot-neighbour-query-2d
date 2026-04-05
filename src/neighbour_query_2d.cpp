@@ -500,7 +500,6 @@ Node2D *NeighbourQuery2D::get_next(const Vector2 &p_position, float p_max_distan
 }
 
 Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
-	return Array();
 	const Vector2 qpos = prepare_query(p_position, p_max_distance, p_min_distance);
 #if DEBUG_INFORMATION
 	if (debug_draw_domain) {
@@ -664,7 +663,6 @@ Node2D *NeighbourQuery2D::get_next_first(const Vector2 &p_position, float p_max_
 }
 
 Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
-	return Array();
 	const Vector2 qpos = prepare_query(p_position, p_max_distance, p_min_distance);
 #if DEBUG_INFORMATION
 	if (debug_draw_domain) {
