@@ -70,8 +70,6 @@ density_texture = SubResource("NoiseTexture2D_h2yge")
 grid_size = 64
 use_global_position = false
 domain = Rect2(0, 0, 1400, 900)
-debug_draw_heatmap_intervall = 0.5
-debug_report_interval = 0.5
 z_index = -1
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=451879680]

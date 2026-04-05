@@ -3,7 +3,7 @@ class_name Benchmark
 
 const ROW_KEYS := ["get_closest", "get_all", "get_next", "get_random", "get_next_first", "refresh"]
 const ATTR_KEYS := ["count", "placement", "movement", "time", "speed"]
-const BENCHMARK_TIME_EACH := 20.0
+const BENCHMARK_TIME_EACH := 5.0
 const QUERY_NODE_SPEED_EACH := 3.0
 const RUNS := [
 	{"count": 5000, "placement": DotContainer.InitPlacementMode.DENSITY, "movement": Dot.MovementMode.NONE,     "time": BENCHMARK_TIME_EACH, "speed": QUERY_NODE_SPEED_EACH},
@@ -15,6 +15,8 @@ const RUNS := [
 
 static func run_benchmark(option_container: OptionContainer) -> void:
 	var saved_state: Dictionary = option_container.get_state()
+	var old_debug_draw_domain = option_container._nq2d.debug_draw_domain
+	option_container._nq2d.debug_draw_domain = false
 
 	# Split attrs into common (same across all runs) and varying
 	var common := {}
@@ -45,6 +47,7 @@ static func run_benchmark(option_container: OptionContainer) -> void:
 		results.append(_parse_report(report))
 
 	option_container.restore_state(saved_state)
+	option_container._nq2d.debug_draw_domain = old_debug_draw_domain
 
 	var output := _build_description(common) + _build_table(labels, results)
 	DisplayServer.clipboard_set(output)
