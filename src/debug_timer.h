@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -9,15 +10,38 @@
 
 class DebugTimer {
 public:
+	// Lightweight key: hash computed at compile time from a string literal,
+	// name pointer kept for report generation only.
+	struct Key {
+		uint64_t id;
+		const char *name;
+		constexpr Key(const char *s) :
+				id(_fnv1a(s)), name(s) {}
+		bool operator==(const Key &o) const noexcept { return id == o.id; }
+		struct Hash {
+			size_t operator()(const Key &k) const noexcept { return k.id; }
+		};
+
+	private:
+		static constexpr uint64_t _fnv1a(const char *s) noexcept {
+			uint64_t h = 14695981039346656037ULL;
+			while (*s) {
+				h ^= static_cast<uint8_t>(*s++);
+				h *= 1099511628211ULL;
+			}
+			return h;
+		}
+	};
+
 	explicit DebugTimer(int frame_goal = 60) :
 			m_frame_goal(frame_goal), m_last_reset(std::chrono::steady_clock::now()) {}
 
-	void start(const std::string &group, const std::string &key) {
+	void start(Key group, Key key) {
 		m_groups[group][key].t_start = std::chrono::steady_clock::now();
 	}
 
 	// Records elapsed time since start() and increments the call counter.
-	void stop(const std::string &group, const std::string &key) {
+	void stop(Key group, Key key) {
 		const auto now = std::chrono::steady_clock::now();
 		auto &e = m_groups[group][key];
 		e.total += now - e.t_start;
@@ -42,10 +66,10 @@ public:
 			grand_ns += group_ns;
 
 			oss << "\n";
-			oss << "  " << group << ": " << format_entry(group_ns, group_count, nframes, frame_budget_ns);
+			oss << "  " << group.name << ": " << format_entry(group_ns, group_count, nframes, frame_budget_ns);
 			for (const auto &[key, e] : entries)
 				if (e.count > 0)
-					oss << "\n    " << key << ": " << format_entry(ns(e), e.count, nframes);
+					oss << "\n    " << key.name << ": " << format_entry(ns(e), e.count, nframes);
 		}
 		return "Total: " + format_entry(grand_ns, 0, nframes, frame_budget_ns) + oss.str();
 	}
@@ -70,7 +94,7 @@ private:
 
 	int m_frame_goal;
 	std::chrono::steady_clock::time_point m_last_reset;
-	std::unordered_map<std::string, std::unordered_map<std::string, Entry>> m_groups;
+	std::unordered_map<Key, std::unordered_map<Key, Entry, Key::Hash>, Key::Hash> m_groups;
 
 	double elapsed_seconds() const {
 		return std::chrono::duration<double>(std::chrono::steady_clock::now() - m_last_reset).count();

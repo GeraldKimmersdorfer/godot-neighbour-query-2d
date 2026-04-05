@@ -501,7 +501,7 @@ Node2D *NeighbourQuery2D::get_next(const Vector2 &p_position, float p_max_distan
 Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_count, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	const Vector2 qpos = prepare_query(p_position, p_max_distance, p_min_distance);
 #if DEBUG_INFORMATION
-	{
+	if (debug_draw_domain) {
 		int cx0 = static_cast<int>(std::floor((qpos.x - domain.position.x) / grid_size));
 		int cy0 = static_cast<int>(std::floor((qpos.y - domain.position.y) / grid_size));
 		if (is_cell_in_bounds(cx0, cy0)) {
@@ -525,7 +525,8 @@ Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_cou
 				continue;
 			}
 #if DEBUG_INFORMATION
-			m_grid_cellreads_debug[cell_idx]++;
+			if (debug_draw_domain)
+				m_grid_cellreads_debug[cell_idx]++;
 #endif
 			for (const GridEntry &s : cell.entries) {
 				if ((s.layer & p_layer_mask) == 0) {
@@ -548,15 +549,18 @@ Array NeighbourQuery2D::get_random_grid(const Vector2 &p_position, int p_max_cou
 	thread_local static std::default_random_engine rng(std::random_device{}());
 	int remaining = (int)candidates.size();
 	Array result;
-	while (remaining > 0 && (int)result.size() < p_max_count) {
+	result.resize(MIN(remaining, p_max_count));
+	int count = 0;
+	while (remaining > 0 && count < p_max_count) {
 		int idx = rng() % remaining;
 		const GridEntry *s = candidates[idx];
 		candidates[idx] = candidates[--remaining];
 		if (UtilityFunctions::instance_from_id(s->node_instance_id) == nullptr) {
 			continue;
 		}
-		result.push_back(s->node);
+		result[count++] = s->node;
 	}
+	result.resize(count);
 	return result;
 }
 
@@ -658,9 +662,8 @@ Node2D *NeighbourQuery2D::get_next_first(const Vector2 &p_position, float p_max_
 
 Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_distance, float p_min_distance, uint32_t p_layer_mask, uint64_t p_exclude_id) {
 	const Vector2 qpos = prepare_query(p_position, p_max_distance, p_min_distance);
-
 #if DEBUG_INFORMATION
-	{
+	if (debug_draw_domain) {
 		int cx0 = static_cast<int>(std::floor((qpos.x - domain.position.x) / grid_size));
 		int cy0 = static_cast<int>(std::floor((qpos.y - domain.position.y) / grid_size));
 		if (is_cell_in_bounds(cx0, cy0)) {
@@ -672,10 +675,9 @@ Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_dist
 	float max_dist_sq = p_max_distance * p_max_distance;
 	float min_dist_sq = p_min_distance * p_min_distance;
 
+	auto cr = get_cell_range(qpos, p_max_distance);
 	thread_local static std::vector<const GridEntry *> candidates;
 	candidates.clear();
-
-	auto cr = get_cell_range(qpos, p_max_distance);
 	for (int cy = cr.min_y; cy <= cr.max_y; cy++) {
 		for (int cx = cr.min_x; cx <= cr.max_x; cx++) {
 			const int cell_idx = to_cell_index(cx, cy);
@@ -684,7 +686,8 @@ Array NeighbourQuery2D::get_all_grid(const Vector2 &p_position, float p_max_dist
 				continue;
 			}
 #if DEBUG_INFORMATION
-			m_grid_cellreads_debug[cell_idx]++;
+			if (debug_draw_domain)
+				m_grid_cellreads_debug[cell_idx]++;
 #endif
 			// NOTE: I already tried having template functions with static ifs to completely remove checks like validity, min distance,
 			// and so on from the hot loop. It did not yield any significant change to the execution time. (same for the other get_ functions)
